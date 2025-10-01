@@ -163,14 +163,16 @@ const AuthForm: React.FC = () => {
           
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
             <p className="text-xs text-yellow-800">
-              <strong>Catatan:</strong> Akun siswa hanya bisa dibuat oleh guru melalui menu "Manage Siswa"
+              <strong>Catatan:</strong> Akun siswa hanya bisa dibuat oleh guru melalui menu "Manage Siswa".
+              Password default menggunakan format tanggal lahir (DDMMYYYY).
             </p>
           </div>
           
           {authType === 'student-forgot' && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-xs text-blue-800">
-                <strong>Info:</strong> Password akan direset ke tanggal lahir Anda dalam format DDMMYYYY
+                <strong>Info:</strong> Password akan direset ke tanggal lahir Anda dalam format DDMMYYYY.
+                Contoh: Jika lahir 15 Agustus 2005, password menjadi 15082005
               </p>
             </div>
           )}

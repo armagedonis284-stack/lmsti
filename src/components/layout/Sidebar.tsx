@@ -1,14 +1,15 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { 
-  BookOpen, 
-  Users, 
-  FileText, 
-  ClipboardList, 
-  Calendar, 
+import {
+  BookOpen,
+  Users,
+  FileText,
+  ClipboardList,
+  Calendar,
   Trophy,
   LayoutDashboard,
-  UserPlus
+  UserPlus,
+  User
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 

@@ -1,117 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Users, Eye, EyeOff, Trash2, CreditCard as Edit } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { hashPassword, generateRandomPassword } from '../../utils/auth';
+import { generatePasswordFromBirthDate } from '../../utils/auth';
 
 interface Student {
   id: string;
+  student_id: string;
   full_name: string;
   email: string;
+  birth_date: string;
+  phone?: string;
+  address?: string;
+  is_active: boolean;
   created_at: string;
-  student_auth?: {
-    username: string;
-    is_active: boolean;
-  };
-  classes: {
-    id: string;
-    class_name: string;
-    grade: string;
-  }[];
-}
-
-interface Class {
-  id: string;
-  class_name: string;
-  grade: string;
 }
 
 const ManageStudents: React.FC = () => {
-  const { user } = useAuth();
+  const { user, getStudents, createStudent, updateStudent, deleteStudent } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
-  const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [generatedCredentials, setGeneratedCredentials] = useState<{username: string, password: string} | null>(null);
-  
+  const [generatedCredentials, setGeneratedCredentials] = useState<{email: string, password: string, studentId: string} | null>(null);
+
   // Form states
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [username, setUsername] = useState('');
-  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [birthDate, setBirthDate] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
     if (user) {
-      fetchData();
+      fetchStudents();
     }
   }, [user]);
 
-  const fetchData = async () => {
+  const fetchStudents = async () => {
     if (!user) return;
-    
+
     try {
-      // Fetch teacher's classes
-      const { data: classesData, error: classesError } = await supabase
-        .from('classes')
-        .select('*')
-        .eq('teacher_id', user.id)
-        .order('grade', { ascending: true });
-      
-      if (classesError) throw classesError;
-      setClasses(classesData || []);
-
-      // Fetch students from teacher's classes
-      const classIds = classesData?.map(c => c.id) || [];
-      if (classIds.length > 0) {
-        const { data: studentsData, error: studentsError } = await supabase
-          .from('students_classes')
-          .select(`
-            student_id,
-            users!inner (
-              id,
-              full_name,
-              email,
-              created_at,
-              student_auth (
-                username,
-                is_active
-              )
-            ),
-            classes (
-              id,
-              class_name,
-              grade
-            )
-          `)
-          .in('class_id', classIds);
-        
-        if (studentsError) throw studentsError;
-
-        // Group students by student_id
-        const studentMap = new Map<string, Student>();
-        studentsData?.forEach(item => {
-          const studentId = item.users.id;
-          if (!studentMap.has(studentId)) {
-            studentMap.set(studentId, {
-              id: studentId,
-              full_name: item.users.full_name,
-              email: item.users.email,
-              created_at: item.users.created_at,
-              student_auth: item.users.student_auth?.[0],
-              classes: []
-            });
-          }
-          studentMap.get(studentId)!.classes.push(item.classes);
-        });
-
-        setStudents(Array.from(studentMap.values()));
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setError('Gagal memuat data');
+      const { data, error } = await getStudents();
+      if (error) throw error;
+      setStudents(data || []);
+    } catch (error: any) {
+      console.error('Error fetching students:', error);
+      setError('Gagal memuat data siswa');
     } finally {
       setLoading(false);
     }
@@ -122,65 +57,41 @@ const ManageStudents: React.FC = () => {
     setError('');
     setSuccess('');
 
-    if (selectedClassIds.length === 0) {
-      setError('Pilih minimal satu kelas');
+    if (!fullName || !birthDate) {
+      setError('Nama lengkap dan tanggal lahir harus diisi');
       return;
     }
 
     try {
-      // Generate random password
-      const password = generateRandomPassword();
-      const hashedPassword = await hashPassword(password);
+      const { data, error } = await createStudent({
+        full_name: fullName,
+        birth_date: birthDate,
+        phone: phone || undefined,
+        address: address || undefined
+      });
 
-      // Create user record
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .insert([{
-          email,
-          full_name: fullName,
-          role: 'student'
-        }])
-        .select()
-        .single();
+      if (error) throw error;
 
-      if (userError) throw userError;
-
-      // Create student auth record
-      const { error: authError } = await supabase
-        .from('student_auth')
-        .insert([{
-          username,
-          password: hashedPassword,
-          student_id: userData.id
-        }]);
-
-      if (authError) throw authError;
-
-      // Add student to selected classes
-      const enrollments = selectedClassIds.map(classId => ({
-        student_id: userData.id,
-        class_id: classId
-      }));
-
-      const { error: enrollmentError } = await supabase
-        .from('students_classes')
-        .insert(enrollments);
-
-      if (enrollmentError) throw enrollmentError;
+      // Generate default password from birth date
+      const defaultPassword = generatePasswordFromBirthDate(birthDate);
 
       // Show generated credentials
-      setGeneratedCredentials({ username, password });
+      setGeneratedCredentials({
+        email: data.email,
+        password: defaultPassword,
+        studentId: data.student_id
+      });
       setShowPasswordModal(true);
       setShowAddModal(false);
-      
+
       // Reset form
       setFullName('');
-      setEmail('');
-      setUsername('');
-      setSelectedClassIds([]);
-      
+      setBirthDate('');
+      setPhone('');
+      setAddress('');
+
       // Refresh data
-      fetchData();
+      fetchStudents();
       setSuccess('Siswa berhasil ditambahkan');
     } catch (error: any) {
       console.error('Error adding student:', error);
@@ -192,15 +103,11 @@ const ManageStudents: React.FC = () => {
     if (!confirm('Yakin ingin menghapus siswa ini?')) return;
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', studentId);
-
+      const { error } = await deleteStudent(studentId);
       if (error) throw error;
 
       setSuccess('Siswa berhasil dihapus');
-      fetchData();
+      fetchStudents();
     } catch (error: any) {
       console.error('Error deleting student:', error);
       setError(error.message || 'Gagal menghapus siswa');
@@ -209,15 +116,11 @@ const ManageStudents: React.FC = () => {
 
   const toggleStudentStatus = async (studentId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('student_auth')
-        .update({ is_active: !currentStatus })
-        .eq('student_id', studentId);
-
+      const { error } = await updateStudent(studentId, { is_active: !currentStatus });
       if (error) throw error;
 
       setSuccess(`Status siswa berhasil ${!currentStatus ? 'diaktifkan' : 'dinonaktifkan'}`);
-      fetchData();
+      fetchStudents();
     } catch (error: any) {
       console.error('Error updating student status:', error);
       setError(error.message || 'Gagal mengubah status siswa');
@@ -261,7 +164,7 @@ const ManageStudents: React.FC = () => {
         <div className="px-6 py-4 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-800">Daftar Siswa</h2>
         </div>
-        
+
         {students.length === 0 ? (
           <div className="p-6 text-center text-gray-500">
             <Users size={48} className="mx-auto mb-4 text-gray-300" />
@@ -276,10 +179,13 @@ const ManageStudents: React.FC = () => {
                     Nama
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Username
+                    ID Siswa
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Kelas
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Tanggal Lahir
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
@@ -297,42 +203,38 @@ const ManageStudents: React.FC = () => {
                         <div className="text-sm font-medium text-gray-900">
                           {student.full_name}
                         </div>
-                        <div className="text-sm text-gray-500">{student.email}</div>
+                        {student.phone && (
+                          <div className="text-sm text-gray-500">{student.phone}</div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {student.student_auth?.username || '-'}
+                      {student.student_id}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-wrap gap-1">
-                        {student.classes.map((cls) => (
-                          <span
-                            key={cls.id}
-                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                          >
-                            {cls.grade} - {cls.class_name}
-                          </span>
-                        ))}
-                      </div>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {student.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(student.birth_date).toLocaleDateString('id-ID')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          student.student_auth?.is_active
+                          student.is_active
                             ? 'bg-green-100 text-green-800'
                             : 'bg-red-100 text-red-800'
                         }`}
                       >
-                        {student.student_auth?.is_active ? 'Aktif' : 'Nonaktif'}
+                        {student.is_active ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => toggleStudentStatus(student.id, student.student_auth?.is_active || false)}
+                          onClick={() => toggleStudentStatus(student.id, student.is_active)}
                           className="text-blue-600 hover:text-blue-900"
                         >
-                          {student.student_auth?.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
+                          {student.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                         <button
                           onClick={() => handleDeleteStudent(student.id)}
@@ -355,7 +257,7 @@ const ManageStudents: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Tambah Siswa Baru</h3>
-            
+
             <form onSubmit={handleAddStudent} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -372,12 +274,12 @@ const ManageStudents: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  Tanggal Lahir
                 </label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
@@ -385,40 +287,26 @@ const ManageStudents: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Username
+                  No. Telepon (Opsional)
                 </label>
                 <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pilih Kelas
+                  Alamat (Opsional)
                 </label>
-                <div className="space-y-2 max-h-32 overflow-y-auto">
-                  {classes.map((cls) => (
-                    <label key={cls.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedClassIds.includes(cls.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedClassIds([...selectedClassIds, cls.id]);
-                          } else {
-                            setSelectedClassIds(selectedClassIds.filter(id => id !== cls.id));
-                          }
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm">{cls.grade} - {cls.class_name}</span>
-                    </label>
-                  ))}
-                </div>
+                <textarea
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
 
               <div className="flex justify-end space-x-3 pt-4">
@@ -446,7 +334,7 @@ const ManageStudents: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Kredensial Login Siswa</h3>
-            
+
             <div className="space-y-4">
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                 <p className="text-sm text-yellow-800 mb-2">
@@ -456,19 +344,28 @@ const ManageStudents: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Username
+                  Email
                 </label>
-                <div className="p-3 bg-gray-50 border rounded-md font-mono text-sm">
-                  {generatedCredentials.username}
+                <div className="p-3 bg-gray-50 border rounded-md font-mono text-sm break-all">
+                  {generatedCredentials.email}
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
+                  Password (Tanggal Lahir - DDMMYYYY)
                 </label>
                 <div className="p-3 bg-gray-50 border rounded-md font-mono text-sm">
                   {generatedCredentials.password}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ID Siswa
+                </label>
+                <div className="p-3 bg-gray-50 border rounded-md font-mono text-sm">
+                  {generatedCredentials.studentId}
                 </div>
               </div>
 

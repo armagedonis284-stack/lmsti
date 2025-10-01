@@ -17,7 +17,6 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
-          role: 'teacher' | 'student';
           created_at: string;
           updated_at: string;
         };
@@ -25,7 +24,6 @@ export type Database = {
           id: string;
           email: string;
           full_name: string;
-          role: 'teacher' | 'student';
           created_at?: string;
           updated_at?: string;
         };
@@ -33,69 +31,48 @@ export type Database = {
           id?: string;
           email?: string;
           full_name?: string;
-          role?: 'teacher' | 'student';
           updated_at?: string;
         };
       };
-      student_auth: {
-        Row: {
-          id: string;
-          email: string;
-          password: string;
-          student_id: string;
-          is_active: boolean;
-          password_reset_token: string | null;
-          password_reset_expires: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          email: string;
-          password: string;
-          student_id: string;
-          is_active?: boolean;
-          password_reset_token?: string | null;
-          password_reset_expires?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          email?: string;
-          password?: string;
-          student_id?: string;
-          is_active?: boolean;
-          password_reset_token?: string | null;
-          password_reset_expires?: string | null;
-          updated_at?: string;
-        };
-      };
-      student_profiles: {
+      students: {
         Row: {
           id: string;
           student_id: string;
+          email: string;
+          password: string;
+          full_name: string;
           birth_date: string;
           phone: string | null;
           address: string | null;
+          is_active: boolean;
+          created_by: string;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           student_id: string;
+          email: string;
+          password: string;
+          full_name: string;
           birth_date: string;
           phone?: string | null;
           address?: string | null;
+          is_active?: boolean;
+          created_by: string;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           student_id?: string;
+          email?: string;
+          password?: string;
+          full_name?: string;
           birth_date?: string;
           phone?: string | null;
           address?: string | null;
+          is_active?: boolean;
           updated_at?: string;
         };
       };
