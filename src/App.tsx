@@ -12,6 +12,14 @@ import ClassStudents from './components/teacher/ClassStudents';
 import ClassAttendance from './components/teacher/ClassAttendance';
 import TakeAttendance from './components/teacher/TakeAttendance';
 import AttendanceRecords from './components/teacher/AttendanceRecords';
+import AssignmentSubmissions from './components/teacher/AssignmentSubmissions';
+import GradeAssignment from './components/teacher/GradeAssignment';
+import ManageContent from './components/teacher/ManageContent';
+import CreateContent from './components/teacher/CreateContent';
+import EditContent from './components/teacher/EditContent';
+import TeacherLeaderboard from './components/teacher/TeacherLeaderboard';
+import StudentLeaderboard from './components/student/StudentLeaderboard';
+import StudentMaterials from './components/student/StudentMaterials';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const AppContent: React.FC = () => {
@@ -50,8 +58,12 @@ const AppContent: React.FC = () => {
         <Route path="classes/:classId/attendance" element={<ClassAttendance />} />
         <Route path="classes/:classId/attendance/:sessionId" element={<TakeAttendance />} />
         <Route path="classes/:classId/attendance/:sessionId/records" element={<AttendanceRecords />} />
-        <Route path="materials" element={<div className="p-6">Materials & Assignments - Coming Soon</div>} />
-        <Route path="leaderboard" element={<div className="p-6">Leaderboard - Coming Soon</div>} />
+        <Route path="assignments/:id/submissions" element={<AssignmentSubmissions />} />
+        <Route path="assignments/:id/grade" element={<GradeAssignment />} />
+        <Route path="content" element={<ManageContent />} />
+        <Route path="content/create" element={<CreateContent />} />
+        <Route path="content/:id/edit" element={<EditContent />} />
+        <Route path="leaderboard" element={<TeacherLeaderboard />} />
       </Route>
       
       <Route path="/student/*" element={
@@ -62,9 +74,9 @@ const AppContent: React.FC = () => {
         <Route path="dashboard" element={<StudentDashboard />} />
         <Route path="profile" element={<StudentProfile />} />
         <Route path="edit-profile" element={<EditProfile />} />
-        <Route path="materials" element={<div className="p-6">Materials - Coming Soon</div>} />
+        <Route path="materials" element={<StudentMaterials />} />
         <Route path="assignments" element={<div className="p-6">Assignments - Coming Soon</div>} />
-        <Route path="grades" element={<div className="p-6">Grades & Leaderboard - Coming Soon</div>} />
+        <Route path="grades" element={<StudentLeaderboard />} />
       </Route>
       
       <Route path="*" element={<Navigate to="/" replace />} />

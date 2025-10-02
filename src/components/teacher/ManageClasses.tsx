@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, BookOpen, Users, UserCog, CheckSquare } from 'lucide-react';
+import { Plus, BookOpen, Users, UserCog, CheckSquare, Edit, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { ClassCardSkeleton } from '../ui/SkeletonLoader';
 
 interface Class {
   id: string;
@@ -18,8 +19,14 @@ const ManageClasses: React.FC = () => {
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editingClass, setEditingClass] = useState<Class | null>(null);
+  const [deletingClass, setDeletingClass] = useState<Class | null>(null);
   const [newClass, setNewClass] = useState({ grade: '', class_name: '' });
+  const [editClass, setEditClass] = useState({ grade: '', class_name: '' });
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (user && profile) {
@@ -78,8 +85,89 @@ const ManageClasses: React.FC = () => {
       setShowAddForm(false);
     } catch (error) {
       console.error('Error creating class:', error);
+      alert('Gagal membuat kelas');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditClass = (cls: Class) => {
+    setEditingClass(cls);
+    setEditClass({ grade: cls.grade, class_name: cls.class_name });
+    setShowEditModal(true);
+  };
+
+  const handleUpdateClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClass || !editClass.grade || !editClass.class_name) return;
+
+    try {
+      setSaving(true);
+      const { data, error } = await supabase
+        .from('classes')
+        .update({
+          grade: editClass.grade,
+          class_name: editClass.class_name
+        })
+        .eq('id', editingClass.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setClasses(prev => prev.map(cls => cls.id === editingClass.id ? data : cls));
+      setShowEditModal(false);
+      setEditingClass(null);
+      setEditClass({ grade: '', class_name: '' });
+    } catch (error) {
+      console.error('Error updating class:', error);
+      alert('Gagal mengupdate kelas');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteClass = (cls: Class) => {
+    setDeletingClass(cls);
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteClass = async () => {
+    if (!deletingClass) return;
+
+    try {
+      setDeleting(true);
+
+      // Check if class has students
+      const { data: students, error: studentsError } = await supabase
+        .from('students_classes')
+        .select('id')
+        .eq('class_id', deletingClass.id);
+
+      if (studentsError) throw studentsError;
+
+      if (students && students.length > 0) {
+        alert('Tidak dapat menghapus kelas yang masih memiliki siswa. Pindahkan siswa terlebih dahulu.');
+        setShowDeleteModal(false);
+        setDeletingClass(null);
+        return;
+      }
+
+      const { error } = await supabase
+        .from('classes')
+        .delete()
+        .eq('id', deletingClass.id);
+
+      if (error) throw error;
+
+      setClasses(prev => prev.filter(cls => cls.id !== deletingClass.id));
+      setShowDeleteModal(false);
+      setDeletingClass(null);
+    } catch (error) {
+      console.error('Error deleting class:', error);
+      alert('Gagal menghapus kelas');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -87,7 +175,9 @@ const ManageClasses: React.FC = () => {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <div className="grid grid-cols-1 xs:grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
+          <ClassCardSkeleton count={8} />
+        </div>
       </div>
     );
   }
@@ -202,6 +292,22 @@ const ManageClasses: React.FC = () => {
                 <CheckSquare size={16} />
                 <span>Absen</span>
               </button>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => handleEditClass(cls)}
+                  className="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded-md transition-colors text-sm flex items-center justify-center shadow-sm"
+                  title="Edit Kelas"
+                >
+                  <Edit size={14} />
+                </button>
+                <button
+                  onClick={() => handleDeleteClass(cls)}
+                  className="bg-red-600 hover:bg-red-700 text-white p-2 rounded-md transition-colors text-sm flex items-center justify-center shadow-sm"
+                  title="Hapus Kelas"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -218,6 +324,117 @@ const ManageClasses: React.FC = () => {
           >
             Tambah Kelas Pertama
           </button>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && editingClass && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Edit Kelas</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateClass} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tingkat
+                </label>
+                <select
+                  value={editClass.grade}
+                  onChange={(e) => setEditClass(prev => ({ ...prev, grade: e.target.value }))}
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="">Pilih Tingkat</option>
+                  <option value="X">Kelas X</option>
+                  <option value="XI">Kelas XI</option>
+                  <option value="XII">Kelas XII</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nama Kelas
+                </label>
+                <input
+                  type="text"
+                  value={editClass.class_name}
+                  onChange={(e) => setEditClass(prev => ({ ...prev, class_name: e.target.value }))}
+                  placeholder="Contoh: IPA 1, IPS 2"
+                  className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-md disabled:opacity-50"
+                >
+                  {saving ? 'Menyimpan...' : 'Update Kelas'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deletingClass && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-800">Hapus Kelas</h2>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={deleting}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-gray-600 mb-2">
+                Apakah Anda yakin ingin menghapus kelas <strong>{deletingClass.grade} {deletingClass.class_name}</strong>?
+              </p>
+              <p className="text-sm text-red-600">
+                Tindakan ini tidak dapat dibatalkan. Pastikan kelas sudah tidak memiliki siswa.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={confirmDeleteClass}
+                disabled={deleting}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-md disabled:opacity-50"
+              >
+                {deleting ? 'Menghapus...' : 'Hapus Kelas'}
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-4 py-3 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-50"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
