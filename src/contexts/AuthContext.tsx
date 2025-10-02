@@ -77,6 +77,16 @@ export const useAuth = () => {
   return context;
 };
 
+// Simple cache for user profile data
+const userProfileCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Simple circuit breaker for database operations
+let dbFailureCount = 0;
+const DB_FAILURE_THRESHOLD = 3;
+const DB_RECOVERY_TIMEOUT = 30000; // 30 seconds
+let lastDbFailure = 0;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -85,63 +95,107 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching user profile:', error);
-      return null;
+  const isDbCircuitBreakerOpen = () => {
+    if (dbFailureCount >= DB_FAILURE_THRESHOLD) {
+      if (Date.now() - lastDbFailure > DB_RECOVERY_TIMEOUT) {
+        // Reset circuit breaker after recovery timeout
+        dbFailureCount = 0;
+        return false;
+      }
+      return true;
     }
-    
-    return data;
+    return false;
   };
 
-  // Helper function to determine user type - simplified logic
+  const recordDbFailure = () => {
+    dbFailureCount++;
+    lastDbFailure = Date.now();
+  };
+
+  const fetchUserProfile = async (userId: string) => {
+    // Check cache first
+    const cached = userProfileCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
+
+    // Check circuit breaker
+    if (isDbCircuitBreakerOpen()) {
+      console.warn('Database circuit breaker is open, using cached data if available');
+      return cached?.data || null;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        recordDbFailure();
+        console.error('Error fetching user profile:', error);
+        return cached?.data || null; // Return cached data on error
+      }
+
+      // Reset failure count on success
+      dbFailureCount = 0;
+
+      // Cache the result
+      userProfileCache.set(userId, { data, timestamp: Date.now() });
+      return data;
+    } catch (error) {
+      recordDbFailure();
+      console.error('Error in fetchUserProfile:', error);
+      return cached?.data || null;
+    }
+  };
+
+  // Helper function to determine user type - optimized parallel queries
   // Teachers: Exist in Supabase auth (users table)
   // Students: Exist in students table only (no Supabase auth)
   const determineUserType = async (userId: string, email: string) => {
     try {
-      // First priority: Check if user exists in users table (teachers from Supabase auth)
-      const { data: userData, error: userError } = await Promise.race([
-        supabase
-          .from('users')
-          .select('*')
-          .eq('id', userId)
-          .single(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('User check timeout')), 5000)
-        )
-      ]) as any;
-
-      if (userData && !userError) {
-        return { type: 'teacher', profile: userData };
+      // Check circuit breaker first
+      if (isDbCircuitBreakerOpen()) {
+        console.warn('Database circuit breaker is open, cannot determine user type');
+        return { type: null, profile: null };
       }
 
-      // Second priority: Check if email exists in students table (students created by teachers)
-      const { data: studentData, error: studentError } = await Promise.race([
+      // Run both queries in parallel for better performance
+      const [userResult, studentResult] = await Promise.allSettled([
+        // Check users table (teachers)
+        supabase
+          .from('users')
+          .select('id, email, full_name')
+          .eq('id', userId)
+          .single(),
+        // Check students table (students)
         supabase
           .from('students')
-          .select('*')
+          .select('id, student_id, email, full_name, birth_date, phone, address, is_active, created_by')
           .eq('email', email)
           .eq('is_active', true)
-          .single(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Student check timeout')), 5000)
-        )
-      ]) as any;
+          .single()
+      ]);
 
-      if (studentData && !studentError) {
-        return { type: 'student', profile: studentData };
+      // Check user result first (teachers have priority)
+      if (userResult.status === 'fulfilled' && userResult.value.data && !userResult.value.error) {
+        dbFailureCount = 0; // Reset on success
+        return { type: 'teacher' as const, profile: userResult.value.data };
+      }
+
+      // Check student result
+      if (studentResult.status === 'fulfilled' && studentResult.value.data && !studentResult.value.error) {
+        dbFailureCount = 0; // Reset on success
+        return { type: 'student' as const, profile: studentResult.value.data };
       }
 
       // If no data found in either table, return null
       console.warn('User not found in users or students table:', { userId, email });
       return { type: null, profile: null };
     } catch (error) {
+      recordDbFailure();
       console.error('Error in determineUserType:', error);
       return { type: null, profile: null };
     }
@@ -169,19 +223,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Add timeout to prevent infinite loading (longer timeout)
+          // Add timeout to prevent infinite loading
           const timeoutId = setTimeout(() => {
             if (isMounted) {
               console.warn('Authentication check timeout - but session might still be valid');
-              // Don't clear states if we have a valid session
-              if (!session?.user) {
-                setProfile(null);
-                setStudentAuth(null);
-                setStudentProfile(null);
-              }
               setLoading(false);
             }
-          }, 10000);
+          }, 8000);
 
           try {
             const userType = await determineUserType(session.user.id, session.user.email!);
@@ -223,11 +271,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setStudentAuth(null);
               setStudentProfile(null);
             }
+          } finally {
+            if (isMounted) {
+              setLoading(false);
+            }
           }
         } else {
           setProfile(null);
           setStudentAuth(null);
           setStudentProfile(null);
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error in getSession:', error);
@@ -236,9 +289,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setProfile(null);
           setStudentAuth(null);
           setStudentProfile(null);
-        }
-      } finally {
-        if (isMounted) {
           setLoading(false);
         }
       }
@@ -255,16 +305,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            // Add timeout for auth state changes (longer timeout)
+            // Add timeout for auth state changes
             const timeoutId = setTimeout(() => {
               if (isMounted) {
                 console.warn('Auth state change timeout - but user might still be valid');
-                // Don't clear states if we have a valid session
-                if (!session?.user) {
-                  setProfile(null);
-                  setStudentAuth(null);
-                  setStudentProfile(null);
-                }
                 setLoading(false);
               }
             }, 8000);
@@ -309,22 +353,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setStudentAuth(null);
                 setStudentProfile(null);
               }
+            } finally {
+              if (isMounted) {
+                setLoading(false);
+              }
             }
           } else {
             setProfile(null);
             setStudentAuth(null);
             setStudentProfile(null);
+            setLoading(false);
           }
         } catch (error) {
           console.error('Error in onAuthStateChange:', error);
-          // Clear all states on error
           if (isMounted) {
             setProfile(null);
             setStudentAuth(null);
             setStudentProfile(null);
-          }
-        } finally {
-          if (isMounted) {
             setLoading(false);
           }
         }
@@ -348,30 +393,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const studentSignIn = async (email: string, password: string) => {
-    let isMounted = true;
     try {
       setLoading(true);
 
       // Add timeout for student sign in (longer timeout)
       const timeoutId = setTimeout(() => {
-        if (isMounted) {
-          setLoading(false);
-          console.warn('Student sign in timeout');
-        }
-      }, 15000);
+        setLoading(false);
+        console.warn('Student sign in timeout');
+      }, 20000);
 
       // Students login directly from students table (no Supabase auth)
       // This is separate from teacher login which uses Supabase auth
-      const { data: studentData, error: studentError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single();
-
-      clearTimeout(timeoutId);
+      const { data: studentData, error: studentError } = await Promise.race([
+        supabase
+          .from('students')
+          .select('*')
+          .eq('email', email)
+          .eq('is_active', true)
+          .single(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Student login timeout')), 15000)
+        )
+      ]) as any;
 
       if (studentError || !studentData) {
+        clearTimeout(timeoutId);
+        setLoading(false);
         return { error: { message: 'Email tidak ditemukan atau akun tidak aktif' } };
       }
 
@@ -384,8 +431,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       if (!isValidPassword) {
+        clearTimeout(timeoutId);
+        setLoading(false);
         return { error: { message: 'Password salah' } };
       }
+
+      clearTimeout(timeoutId);
 
       // Set auth state manually for students (no Supabase session)
       setStudentAuth(studentData);
@@ -404,21 +455,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error in studentSignIn:', error);
       return { error: { message: error instanceof Error ? error.message : 'Terjadi kesalahan saat login' } };
     } finally {
-      if (isMounted) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
   const studentForgotPassword = async (email: string) => {
     try {
       // Get student data with birth date
-      const { data: studentData, error: studentError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single();
+      const { data: studentData, error: studentError } = await Promise.race([
+        supabase
+          .from('students')
+          .select('*')
+          .eq('email', email)
+          .eq('is_active', true)
+          .single(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Student lookup timeout')), 15000)
+        )
+      ]) as any;
 
       if (studentError || !studentData) {
         return { error: { message: 'Email tidak ditemukan' } };
@@ -444,10 +498,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const studentResetPassword = async (token: string, newPassword: string) => {
+  const studentResetPassword = async (_token: string, newPassword: string) => {
     try {
-      const hashedPassword = await hashPassword(newPassword);
-
       // For now, we'll implement a simple password reset
       // In production, you'd want a proper token-based system
       return { error: { message: 'Password reset not implemented in new schema' } };

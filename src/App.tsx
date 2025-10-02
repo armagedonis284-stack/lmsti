@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthForm from './components/auth/AuthForm';
@@ -6,7 +6,12 @@ import Layout from './components/layout/Layout';
 import TeacherDashboard from './components/teacher/TeacherDashboard';
 import StudentDashboard from './components/student/StudentDashboard';
 import StudentProfile from './components/student/StudentProfile';
-import ManageStudents from './components/teacher/ManageStudents';
+import EditProfile from './components/student/EditProfile';
+import ManageClasses from './components/teacher/ManageClasses';
+import ClassStudents from './components/teacher/ClassStudents';
+import ClassAttendance from './components/teacher/ClassAttendance';
+import TakeAttendance from './components/teacher/TakeAttendance';
+import AttendanceRecords from './components/teacher/AttendanceRecords';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const AppContent: React.FC = () => {
@@ -40,10 +45,12 @@ const AppContent: React.FC = () => {
         </ProtectedRoute>
       }>
         <Route path="dashboard" element={<TeacherDashboard />} />
-        <Route path="classes" element={<div className="p-6">Manage Classes - Coming Soon</div>} />
-        <Route path="students" element={<ManageStudents />} />
+        <Route path="classes" element={<ManageClasses />} />
+        <Route path="classes/:classId/students" element={<ClassStudents />} />
+        <Route path="classes/:classId/attendance" element={<ClassAttendance />} />
+        <Route path="classes/:classId/attendance/:sessionId" element={<TakeAttendance />} />
+        <Route path="classes/:classId/attendance/:sessionId/records" element={<AttendanceRecords />} />
         <Route path="materials" element={<div className="p-6">Materials & Assignments - Coming Soon</div>} />
-        <Route path="attendance" element={<div className="p-6">Attendance - Coming Soon</div>} />
         <Route path="leaderboard" element={<div className="p-6">Leaderboard - Coming Soon</div>} />
       </Route>
       
@@ -54,6 +61,7 @@ const AppContent: React.FC = () => {
       }>
         <Route path="dashboard" element={<StudentDashboard />} />
         <Route path="profile" element={<StudentProfile />} />
+        <Route path="edit-profile" element={<EditProfile />} />
         <Route path="materials" element={<div className="p-6">Materials - Coming Soon</div>} />
         <Route path="assignments" element={<div className="p-6">Assignments - Coming Soon</div>} />
         <Route path="grades" element={<div className="p-6">Grades & Leaderboard - Coming Soon</div>} />
