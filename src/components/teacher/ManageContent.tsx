@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, FileText, BookOpen, Edit, Trash2, Download, Eye, CheckCircle, Calendar, Filter } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ContentCardSkeleton } from '../ui/SkeletonLoader';
@@ -45,6 +46,7 @@ type ContentItem = Assignment | Material;
 
 const ManageContent: React.FC = () => {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [content, setContent] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'assignments' | 'materials'>('all');
@@ -201,7 +203,7 @@ const ManageContent: React.FC = () => {
             <option value="materials">Materi</option>
           </select>
           <button
-            onClick={() => window.location.href = '/teacher/content/create'}
+            onClick={() => navigate('/teacher/content/create')}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm"
           >
             <Plus size={20} />
@@ -245,7 +247,7 @@ const ManageContent: React.FC = () => {
             }
           </p>
           <button
-            onClick={() => window.location.href = '/teacher/content/create'}
+            onClick={() => navigate('/teacher/content/create')}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg"
           >
             Tambah Konten Pertama
@@ -288,7 +290,7 @@ const ManageContent: React.FC = () => {
                 <div className="flex gap-2 ml-4">
                   {item.content_type === 'assignment' && (
                     <button
-                      onClick={() => window.location.href = `/teacher/assignments/${item.id}/submissions`}
+                      onClick={() => navigate(`/teacher/assignments/${item.id}/submissions`)}
                       className="text-blue-600 hover:text-blue-800 p-1"
                       title="Lihat Pengumpulan"
                     >
@@ -296,7 +298,7 @@ const ManageContent: React.FC = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => window.location.href = `/teacher/content/${item.id}/edit`}
+                    onClick={() => navigate(`/teacher/content/${item.id}/edit`)}
                     className="text-gray-600 hover:text-gray-800 p-1"
                     title="Edit Konten"
                   >
@@ -363,14 +365,14 @@ const ManageContent: React.FC = () => {
                 {item.content_type === 'assignment' ? (
                   <>
                     <button
-                      onClick={() => window.location.href = `/teacher/assignments/${item.id}/submissions`}
+                      onClick={() => navigate(`/teacher/assignments/${item.id}/submissions`)}
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors text-sm flex items-center justify-center gap-2"
                     >
                       <Eye size={14} />
                       <span>Lihat Pengumpulan</span>
                     </button>
                     <button
-                      onClick={() => window.location.href = `/teacher/assignments/${item.id}/grade`}
+                      onClick={() => navigate(`/teacher/assignments/${item.id}/grade`)}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-md transition-colors text-sm flex items-center justify-center gap-2"
                     >
                       <CheckCircle size={14} />
@@ -380,14 +382,14 @@ const ManageContent: React.FC = () => {
                 ) : (
                   <>
                     <button
-                      onClick={() => window.location.href = `/teacher/materials/${item.id}/view`}
+                      onClick={() => navigate(`/teacher/materials/${item.id}/view`)}
                       className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-md transition-colors text-sm flex items-center justify-center gap-2"
                     >
                       <Eye size={14} />
                       <span>Lihat</span>
                     </button>
                     <button
-                      onClick={() => window.location.href = `/teacher/materials/${item.id}/edit`}
+                      onClick={() => navigate(`/teacher/materials/${item.id}/edit`)}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded-md transition-colors text-sm flex items-center justify-center gap-2"
                     >
                       <Edit size={14} />

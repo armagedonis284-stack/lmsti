@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Download, Eye, CheckCircle, Clock, AlertCircle, FileText } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { SubmissionCardSkeleton } from '../ui/SkeletonLoader';
@@ -35,6 +36,8 @@ interface Assignment {
 
 const AssignmentSubmissions: React.FC = () => {
   const { user, profile } = useAuth();
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,13 +53,9 @@ const AssignmentSubmissions: React.FC = () => {
     try {
       setLoading(true);
 
-      // Get assignment ID from URL
-      const urlParams = new URLSearchParams(window.location.search);
-      const assignmentId = urlParams.get('id');
-
-      if (!assignmentId) {
+      if (!id) {
         alert('ID tugas tidak ditemukan');
-        window.location.href = '/teacher/assignments';
+        navigate('/teacher/content');
         return;
       }
 
@@ -67,7 +66,7 @@ const AssignmentSubmissions: React.FC = () => {
           *,
           class:classes(grade, class_name)
         `)
-        .eq('id', assignmentId)
+        .eq('id', id)
         .single();
 
       if (assignmentError) throw assignmentError;
@@ -75,7 +74,7 @@ const AssignmentSubmissions: React.FC = () => {
       // Verify teacher has access to this assignment
       if (assignmentData.created_by !== user?.id) {
         alert('Anda tidak memiliki akses untuk melihat pengumpulan tugas ini');
-        window.location.href = '/teacher/assignments';
+        navigate('/teacher/content');
         return;
       }
 
@@ -89,7 +88,7 @@ const AssignmentSubmissions: React.FC = () => {
           student:students(id, full_name, student_id),
           score:scores(score, max_score, feedback)
         `)
-        .eq('assignment_id', assignmentId)
+        .eq('assignment_id', id)
         .order('submitted_at', { ascending: false });
 
       if (submissionsError) throw submissionsError;
@@ -157,7 +156,7 @@ const AssignmentSubmissions: React.FC = () => {
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
         <button
-          onClick={() => window.history.back()}
+          onClick={() => navigate('/teacher/content')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
         >
           <ArrowLeft size={20} />
@@ -263,7 +262,7 @@ const AssignmentSubmissions: React.FC = () => {
                   </button>
                   {!submission.score && (
                     <button
-                      onClick={() => window.location.href = `/teacher/assignments/${assignment.id}/grade?student=${submission.student.id}`}
+                      onClick={() => navigate(`/teacher/assignments/${assignment.id}/grade?student=${submission.student.id}`)}
                       className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md transition-colors flex items-center justify-center gap-2"
                     >
                       <CheckCircle size={16} />

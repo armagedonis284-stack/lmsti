@@ -94,16 +94,31 @@ const StudentLeaderboard: React.FC = () => {
         return;
       }
 
+      // Get assignments for the main class first
+      const { data: assignmentsForClass, error: assignmentsError } = await supabase
+        .from('assignments')
+        .select('id')
+        .eq('class_id', mainClass.class_id);
+
+      if (assignmentsError) throw assignmentsError;
+
+      const assignmentIds = assignmentsForClass?.map(a => a.id) || [];
+
+      if (assignmentIds.length === 0) {
+        setStudentStats(null);
+        setClassmates([]);
+        return;
+      }
+
       // Get all scores for students in this class with time filtering
       let scoresQuery = supabase
         .from('scores')
         .select(`
           *,
-          student:students(id, full_name, student_id),
-          assignment:assignments(title, class_id, created_at)
+          student:students(id, full_name, student_id)
         `)
         .in('student_id', studentIds)
-        .eq('assignment.class_id', mainClass.class_id);
+        .in('assignment_id', assignmentIds);
 
       // Apply time period filter
       if (selectedPeriod === 'month') {

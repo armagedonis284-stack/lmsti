@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, BookOpen, Users, UserCog, CheckSquare, Edit, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { ClassCardSkeleton } from '../ui/SkeletonLoader';
@@ -16,6 +17,7 @@ interface Class {
 
 const ManageClasses: React.FC = () => {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -279,14 +281,14 @@ const ManageClasses: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row gap-2">
               <button
-                onClick={() => window.location.href = `/teacher/classes/${cls.id}/students`}
+                onClick={() => navigate(`/teacher/classes/${cls.id}/students`)}
                 className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-3 rounded-md transition-colors text-sm flex items-center justify-center gap-2 shadow-sm"
               >
                 <UserCog size={16} />
                 <span>Kelola</span>
               </button>
               <button
-                onClick={() => window.location.href = `/teacher/classes/${cls.id}/attendance`}
+                onClick={() => navigate(`/teacher/classes/${cls.id}/attendance`)}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2.5 px-3 rounded-md transition-colors text-sm flex items-center justify-center gap-2 shadow-sm"
               >
                 <CheckSquare size={16} />

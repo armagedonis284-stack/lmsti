@@ -47,7 +47,8 @@ const StudentDashboard: React.FC = () => {
             id,
             class_name,
             grade,
-            users (full_name)
+            teacher_id,
+            users!teacher_id (full_name)
           )
         `)
         .eq('student_id', user.id);
@@ -92,12 +93,17 @@ const StudentDashboard: React.FC = () => {
       const averageScore = Math.round((totalScore / totalMaxScore) * 100);
 
       // Format class data
-      const classesInfo: ClassInfo[] = studentClasses?.map(sc => ({
-        id: sc.classes.id,
-        class_name: sc.classes.class_name,
-        grade: sc.classes.grade,
-        teacher_name: sc.classes.users.full_name,
-      })) || [];
+      const classesInfo: ClassInfo[] = studentClasses?.map(sc => {
+        const classData = Array.isArray(sc.classes) ? sc.classes[0] : sc.classes;
+        const teacherData = classData?.users ? (Array.isArray(classData.users) ? classData.users[0] : classData.users) : null;
+
+        return {
+          id: classData?.id || '',
+          class_name: classData?.class_name || '',
+          grade: classData?.grade || '',
+          teacher_name: teacherData?.full_name || 'Unknown',
+        };
+      }) || [];
 
       setStats({
         totalClasses: classIds.length,

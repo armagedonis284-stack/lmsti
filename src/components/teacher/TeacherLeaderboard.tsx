@@ -97,15 +97,30 @@ const TeacherLeaderboard: React.FC = () => {
 
       if (studentsError) throw studentsError;
 
+      // Get assignments for teacher's classes first
+      const { data: assignmentsForClasses, error: assignmentsError } = await supabase
+        .from('assignments')
+        .select('id')
+        .in('class_id', classIds);
+
+      if (assignmentsError) throw assignmentsError;
+
+      const assignmentIds = assignmentsForClasses?.map(a => a.id) || [];
+
+      if (assignmentIds.length === 0) {
+        setLeaderboard([]);
+        return;
+      }
+
       // Get all scores with time filtering
       let scoresQuery = supabase
         .from('scores')
         .select(`
           *,
           student:students(id, full_name, student_id),
-          assignment:assignments(title, class_id, created_at, class:classes(grade, class_name))
+          assignment:assignments(title, created_at, class:classes(grade, class_name))
         `)
-        .in('assignment.class_id', classIds);
+        .in('assignment_id', assignmentIds);
 
       // Apply time period filter
       if (filters.time_period === 'month') {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Users, ClipboardList, Calendar, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { DashboardCardSkeleton } from '../ui/SkeletonLoader';
@@ -19,6 +20,7 @@ interface DashboardStats {
 
 const TeacherDashboard: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>({
     totalClasses: 0,
     totalStudents: 0,
@@ -57,12 +59,12 @@ const TeacherDashboard: React.FC = () => {
       if (studentsError) throw studentsError;
 
       // Get total assignments (count unique assignments by title for grade-based system)
-      const { data: assignments, error: assignmentsError } = await supabase
+      const { data: assignments, error: assignmentsCountError } = await supabase
         .from('assignments')
         .select('title')
         .in('class_id', classIds);
 
-      if (assignmentsError) throw assignmentsError;
+      if (assignmentsCountError) throw assignmentsCountError;
 
       // Count unique assignment titles
       const uniqueAssignments = new Set(assignments?.map(a => a.title) || []);
@@ -77,15 +79,40 @@ const TeacherDashboard: React.FC = () => {
       
       if (attendanceError) throw attendanceError;
 
+      // Get assignments for teacher's classes first
+      const { data: assignmentsForClasses, error: assignmentsError } = await supabase
+        .from('assignments')
+        .select('id')
+        .in('class_id', classIds);
+
+      if (assignmentsError) throw assignmentsError;
+
+      const assignmentIds = assignmentsForClasses?.map(a => a.id) || [];
+
+      if (assignmentIds.length === 0) {
+        setStats({
+          totalClasses: classes?.length || 0,
+          totalStudents: new Set(students?.map(s => s.student_id)).size || 0,
+          totalAssignments: uniqueAssignments.size || 0,
+          todayAttendance: attendanceSessions?.length || 0,
+          topPerformer: null,
+          classAverage: 0,
+        });
+        return;
+      }
+
       // Get leaderboard data for top performer and class average
       const { data: scores, error: scoresError } = await supabase
         .from('scores')
         .select(`
           *,
           student:students(id, full_name, student_id),
-          class:classes(grade, class_name)
+          assignment:assignments(
+            id,
+            class:classes(grade, class_name)
+          )
         `)
-        .in('assignment.class_id', classIds)
+        .in('assignment_id', assignmentIds)
         .gte('graded_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()); // Last 30 days
 
       if (scoresError) throw scoresError;
@@ -101,7 +128,7 @@ const TeacherDashboard: React.FC = () => {
             student,
             total: 0,
             count: 0,
-            class: Array.isArray(score.class) ? score.class[0] : score.class
+            class: Array.isArray(score.assignment?.class) ? score.assignment.class[0] : score.assignment?.class
           });
         }
 
@@ -224,29 +251,41 @@ const TeacherDashboard: React.FC = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
-            <BookOpen className="w-8 h-8 text-blue-500 mb-2" />
+          <button
+            onClick={() => navigate('/teacher/classes')}
+            className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer text-left group"
+          >
+            <BookOpen className="w-8 h-8 text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
             <h3 className="font-medium text-gray-800">Buat Kelas Baru</h3>
             <p className="text-sm text-gray-600">Tambahkan kelas untuk semester baru</p>
-          </div>
+          </button>
 
-          <div className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
-            <Users className="w-8 h-8 text-green-500 mb-2" />
+          <button
+            onClick={() => navigate('/teacher/classes')}
+            className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer text-left group"
+          >
+            <Users className="w-8 h-8 text-green-500 mb-2 group-hover:scale-110 transition-transform" />
             <h3 className="font-medium text-gray-800">Tambah Siswa</h3>
             <p className="text-sm text-gray-600">Daftarkan siswa baru ke kelas</p>
-          </div>
+          </button>
 
-          <div className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
-            <FileText className="w-8 h-8 text-orange-500 mb-2" />
+          <button
+            onClick={() => navigate('/teacher/content')}
+            className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer text-left group"
+          >
+            <FileText className="w-8 h-8 text-orange-500 mb-2 group-hover:scale-110 transition-transform" />
             <h3 className="font-medium text-gray-800">Kelola Konten</h3>
             <p className="text-sm text-gray-600">Kelola tugas dan materi pembelajaran</p>
-          </div>
+          </button>
 
-          <div className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
-            <Calendar className="w-8 h-8 text-purple-500 mb-2" />
+          <button
+            onClick={() => navigate('/teacher/classes')}
+            className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer text-left group"
+          >
+            <Calendar className="w-8 h-8 text-purple-500 mb-2 group-hover:scale-110 transition-transform" />
             <h3 className="font-medium text-gray-800">Buat Absensi</h3>
             <p className="text-sm text-gray-600">Mulai sesi absensi untuk kelas</p>
-          </div>
+          </button>
         </div>
       </div>
     </div>
