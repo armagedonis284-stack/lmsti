@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, Medal, Award, TrendingUp, Target, BookOpen, Calendar, Users } from 'lucide-react';
+import { Trophy, Medal, Award, TrendingUp, Target, BookOpen, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { LeaderboardSkeleton } from '../ui/SkeletonLoader';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, Eye, EyeOff, Trash2, CreditCard as Edit } from 'lucide-react';
+import { Plus, Users, Eye, EyeOff, Trash2, CreditCard as Edit, Key } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { generatePasswordFromBirthDate } from '../../utils/auth';
 
@@ -16,12 +16,14 @@ interface Student {
 }
 
 const ManageStudents: React.FC = () => {
-  const { user, getStudents, createStudent, updateStudent, deleteStudent } = useAuth();
+  const { user, getStudents, createStudent, updateStudent, deleteStudent, resetStudentPassword } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] = useState<{email: string, password: string, studentId: string} | null>(null);
+  const [resetPasswordData, setResetPasswordData] = useState<{password: string, studentName: string, studentId: string} | null>(null);
 
   // Form states
   const [fullName, setFullName] = useState('');
@@ -127,6 +129,24 @@ const ManageStudents: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async (studentId: string, studentName: string) => {
+    try {
+      const { error, newPassword } = await resetStudentPassword(studentId);
+      if (error) throw error;
+
+      setResetPasswordData({
+        password: newPassword!,
+        studentName,
+        studentId
+      });
+      setShowResetPasswordModal(true);
+      setSuccess('Password siswa berhasil direset');
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      setError(error.message || 'Gagal mereset password siswa');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -229,21 +249,30 @@ const ManageStudents: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => toggleStudentStatus(student.id, student.is_active)}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          {student.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteStudent(student.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+                       <div className="flex items-center space-x-2">
+                         <button
+                           onClick={() => toggleStudentStatus(student.id, student.is_active)}
+                           className="text-blue-600 hover:text-blue-900"
+                           title={student.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                         >
+                           {student.is_active ? <EyeOff size={16} /> : <Eye size={16} />}
+                         </button>
+                         <button
+                           onClick={() => handleResetPassword(student.id, student.full_name)}
+                           className="text-green-600 hover:text-green-900"
+                           title="Reset Password"
+                         >
+                           <Key size={16} />
+                         </button>
+                         <button
+                           onClick={() => handleDeleteStudent(student.id)}
+                           className="text-red-600 hover:text-red-900"
+                           title="Hapus Siswa"
+                         >
+                           <Trash2 size={16} />
+                         </button>
+                       </div>
+                     </td>
                   </tr>
                 ))}
               </tbody>
@@ -374,6 +403,59 @@ const ManageStudents: React.FC = () => {
                   onClick={() => {
                     setShowPasswordModal(false);
                     setGeneratedCredentials(null);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetPasswordModal && resetPasswordData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Password Baru Siswa</h3>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800 mb-2">
+                  <strong>Info:</strong> Password siswa telah direset ke format tanggal lahir
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nama Siswa
+                </label>
+                <div className="p-3 bg-gray-50 border rounded-md text-sm">
+                  {resetPasswordData.studentName}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password Baru (Tanggal Lahir - DDMMYYYY)
+                </label>
+                <div className="p-3 bg-gray-50 border rounded-md font-mono text-sm">
+                  {resetPasswordData.password}
+                </div>
+              </div>
+
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  <strong>Penting:</strong> Berikan password baru ini kepada siswa. Mereka dapat mengubahnya lagi melalui menu Edit Profil.
+                </p>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <button
+                  onClick={() => {
+                    setShowResetPasswordModal(false);
+                    setResetPasswordData(null);
                   }}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >

@@ -1,132 +1,168 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { X, LogOut, User as UserIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
+  Home,
   BookOpen,
-  FileText,
   ClipboardList,
+  FileText,
   Trophy,
-  LayoutDashboard,
   User,
-  Edit
+  Settings,
+  X,
+  FolderOpen,
+  GraduationCap
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   isOpen: boolean;
+  isTeacher: boolean;
+  currentPath: string;
   onClose: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { profile, signOut } = useAuth();
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
-
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, isTeacher, currentPath, onClose }) => {
   const teacherMenuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/teacher/dashboard' },
-    { icon: BookOpen, label: 'Kelola Kelas', path: '/teacher/classes' },
-    { icon: FileText, label: 'Kelola Konten', path: '/teacher/content' },
-    { icon: Trophy, label: 'Leaderboard', path: '/teacher/leaderboard' },
+    {
+      title: 'Dashboard',
+      icon: Home,
+      path: '/teacher/dashboard',
+    },
+    {
+      title: 'Kelola Kelas',
+      icon: BookOpen,
+      path: '/teacher/classes',
+    },
+    {
+      title: 'Kelola Konten',
+      icon: FileText,
+      path: '/teacher/content',
+    },
+    {
+      title: 'Leaderboard',
+      icon: Trophy,
+      path: '/teacher/leaderboard',
+    },
   ];
 
   const studentMenuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: '/student/dashboard' },
-    { icon: User, label: 'Profil', path: '/student/profile' },
-    { icon: Edit, label: 'Edit Profil', path: '/student/edit-profile' },
-    { icon: FileText, label: 'Materi', path: '/student/materials' },
-    { icon: ClipboardList, label: 'Tugas', path: '/student/assignments' },
-    { icon: Trophy, label: 'Nilai & Leaderboard', path: '/student/grades' },
+    {
+      title: 'Dashboard',
+      icon: Home,
+      path: '/student/dashboard',
+    },
+    {
+      title: 'Materi',
+      icon: FolderOpen,
+      path: '/student/materials',
+    },
+    {
+      title: 'Tugas',
+      icon: ClipboardList,
+      path: '/student/assignments',
+    },
+    {
+      title: 'Nilai',
+      icon: Trophy,
+      path: '/student/grades',
+    },
+    {
+      title: 'Profil',
+      icon: User,
+      path: '/student/profile',
+    },
   ];
 
-  const menuItems = profile?.role === 'teacher' ? teacherMenuItems : studentMenuItems;
+  const menuItems = isTeacher ? teacherMenuItems : studentMenuItems;
+
+  const isActive = (path: string) => {
+    if (path === '/teacher/dashboard' || path === '/student/dashboard') {
+      return currentPath === path;
+    }
+    return currentPath.startsWith(path);
+  };
 
   return (
-    <>
-      {/* Mobile overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 sm:hidden transition-opacity duration-300"
-          onClick={onClose}
-        />
-      )}
-
-      {/* Sidebar */}
-      <div className={`
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        sm:translate-x-0
-        fixed sm:static inset-y-0 left-0 z-50 sm:z-auto
-        w-64 bg-white/95 backdrop-blur-md shadow-2xl sm:shadow-xl
-        border-r border-slate-200/50
-        transition-all duration-300 ease-in-out
-        ${isOpen ? 'shadow-2xl' : ''}
-        h-full
-      `}>
-        <div className="p-4 sm:p-6 border-b border-slate-200/50 flex items-center justify-between bg-gradient-to-r from-blue-600/10 to-indigo-600/10">
-          <div className="flex-1">
-            <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">ClassRoom</h1>
-            <p className="text-xs sm:text-sm text-slate-600 capitalize font-medium">{profile?.role} Dashboard</p>
+    <div className={`
+      fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out rounded-r-2xl
+      ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+      lg:translate-x-0 lg:static lg:inset-0 lg:rounded-none
+      animate-fade-in
+    `}>
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-2xl lg:rounded-none">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">
+                {isTeacher ? 'Teacher Panel' : 'Student Portal'}
+              </h2>
+              <p className="text-sm text-blue-100">
+                {isTeacher ? 'Kelola pembelajaran' : 'Akses materi'}
+              </p>
+            </div>
           </div>
+
+          {/* Close button for mobile */}
           <button
             onClick={onClose}
-            className="sm:hidden p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-all duration-200"
+            className="lg:hidden p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
           >
-            <X size={20} />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <nav className="mt-4 sm:mt-6 px-2 flex-1">
-          {menuItems.map(({ icon: Icon, label, path }) => (
-            <NavLink
-              key={path}
-              to={path}
-              onClick={onClose}
-              className={({ isActive }) =>
-                `group flex items-center px-4 sm:px-6 py-3 mx-2 mb-1 rounded-xl text-slate-700 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 hover:text-blue-600 transition-all duration-200 border border-transparent hover:border-blue-200/50 hover:shadow-md ${
-                  isActive ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 border-blue-200/50 shadow-md font-medium' : ''
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon size={20} className={`mr-3 transition-colors duration-200 ${isActive ? 'text-blue-600' : 'text-slate-500 group-hover:text-blue-600'}`} />
-                  <span className="text-sm sm:text-base font-medium">{label}</span>
-                  {isActive && (
-                    <div className="ml-auto w-1 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full"></div>
-                  )}
-                </>
-              )}
-            </NavLink>
-          ))}
+        {/* Navigation */}
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {menuItems.map((item, index) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
 
-          {/* Mobile logout button */}
-          <div className="sm:hidden mt-4 px-2">
-            <button
-              onClick={handleSignOut}
-              className="group flex items-center w-full px-4 py-3 mx-2 mb-1 rounded-xl text-slate-600 hover:text-white hover:bg-gradient-to-r hover:from-red-500 hover:to-red-600 transition-all duration-200 border border-slate-200/50 hover:border-red-300 shadow-sm hover:shadow-md"
-            >
-              <LogOut size={20} className="mr-3 transition-transform duration-200 group-hover:rotate-12" />
-              <span className="text-sm font-medium">Sign Out</span>
-            </button>
-          </div>
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`
+                  flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 group menu-item-hover animate-slide-up
+                  ${active
+                    ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600 shadow-sm'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 hover:shadow-sm'
+                  }
+                `}
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <Icon className={`
+                  w-5 h-5 transition-colors duration-200
+                  ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}
+                `} />
+                <span className="font-medium">{item.title}</span>
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* Decorative bottom section */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6">
-          <div className="bg-gradient-to-r from-blue-600/10 to-indigo-600/10 rounded-xl p-3 border border-slate-200/30">
-            <div className="flex items-center text-xs text-slate-600">
-              <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-              <span className="font-medium">System Online</span>
+        {/* User section */}
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+              <User className="w-4 h-4 text-gray-600" />
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900 truncate">
+                {/* User name will be passed as prop */}
+                User
+              </p>
+              <p className="text-xs text-gray-500 truncate">
+                {isTeacher ? 'Guru' : 'Siswa'}
+              </p>
+            </div>
+            <Settings className="w-4 h-4 text-gray-400" />
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
