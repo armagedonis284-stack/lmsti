@@ -133,6 +133,9 @@ const AuthForm: React.FC = () => {
     setEmailError("");
     setPasswordError("");
 
+    // Check if we're on mobile for enhanced error handling
+    const deviceIsMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     // Validation
     if (!email) {
       setEmailError("Email harus diisi");
@@ -149,10 +152,8 @@ const AuthForm: React.FC = () => {
 
     try {
       if (authType === "login") {
-        // Check if we're on mobile and add mobile-specific handling
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (isMobile) {
+
+        if (deviceIsMobile) {
           console.log('Mobile device detected, using mobile-optimized login');
         }
 
@@ -167,18 +168,40 @@ const AuthForm: React.FC = () => {
             console.error('Student login also failed:', studentError.message);
             throw studentError;
           }
+        } else {
+          // Teacher login successful - wait for session to be fully established
+          console.log('Teacher login successful - waiting for session establishment');
+
+          if (deviceIsMobile) {
+            // Extra delay for mobile teacher sessions
+            console.log('Mobile teacher login - waiting longer for session...');
+            await new Promise(resolve => setTimeout(resolve, 800));
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
         }
 
-        // Navigate to appropriate dashboard after successful login
+        // Enhanced mobile navigation handling
         console.log('Login successful, navigating to dashboard...');
+        console.log('Current profile state:', {
+          hasProfile: !!profile,
+          role: profile?.role,
+          isMobile: deviceIsMobile
+        });
 
         // Determine the correct dashboard path based on user role
         const dashboardPath = profile?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
 
-        // Use React Router navigation instead of page refresh
+        // Enhanced mobile navigation with longer delay for state stabilization
+        const navigationDelay = deviceIsMobile ? 800 : 200; // Even longer delay for mobile
+
+        console.log(`Navigation delay: ${navigationDelay}ms for ${deviceIsMobile ? 'mobile' : 'desktop'}`);
+        console.log(`Target dashboard: ${dashboardPath}`);
+
         setTimeout(() => {
+          console.log(`Executing navigation to: ${dashboardPath}`);
           navigate(dashboardPath, { replace: true });
-        }, 100);
+        }, navigationDelay);
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
         if (error) throw error;
@@ -192,12 +215,11 @@ const AuthForm: React.FC = () => {
       console.error('Login error:', error);
       
       // Mobile-specific error messages
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       let errorMessage = error.message || "Terjadi kesalahan";
-      
-      if (isMobile && error.message?.includes('fetch')) {
+
+      if (deviceIsMobile && error.message?.includes('fetch')) {
         errorMessage = "Koneksi internet bermasalah. Pastikan HP terhubung ke internet dan coba lagi.";
-      } else if (isMobile && error.message?.includes('CORS')) {
+      } else if (deviceIsMobile && error.message?.includes('CORS')) {
         errorMessage = "Masalah konfigurasi server. Silakan hubungi administrator.";
       }
       

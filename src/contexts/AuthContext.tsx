@@ -129,13 +129,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const getSession = async () => {
       try {
-        // Check for existing student session in localStorage first
-        const studentSession = localStorage.getItem('student_session');
+        // Enhanced localStorage handling for mobile devices
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // Try multiple localStorage keys for better mobile compatibility
+        let studentSession = localStorage.getItem('student_session');
+        if (!studentSession && isMobile) {
+          studentSession = localStorage.getItem('student_session_backup');
+        }
+
         if (studentSession) {
           try {
             const studentData = JSON.parse(studentSession);
 
-            // Verify student still exists in database with correct email
+            // Enhanced verification for mobile devices
             const { data: verifiedStudent, error: verifyError } = await supabase
               .from('students')
               .select('*')
@@ -145,25 +152,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               .single();
 
             if (!verifyError && verifiedStudent && isMounted) {
-              setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
-              setProfile({
-                id: verifiedStudent.id,
-                email: verifiedStudent.email,
-                full_name: verifiedStudent.full_name,
-                role: 'student'
-              });
-              setStudentAuth(verifiedStudent);
-              setStudentProfile(verifiedStudent);
+              console.log('Student session restored successfully');
+
+              // Multiple state updates for mobile stability
+              if (isMobile) {
+                for (let i = 0; i < 2; i++) {
+                  setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
+                  setProfile({
+                    id: verifiedStudent.id,
+                    email: verifiedStudent.email,
+                    full_name: verifiedStudent.full_name,
+                    role: 'student'
+                  });
+                  setStudentAuth(verifiedStudent);
+                  setStudentProfile(verifiedStudent);
+
+                  // Small delay between updates for mobile
+                  await new Promise(resolve => setTimeout(resolve, 50));
+                }
+              } else {
+                setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
+                setProfile({
+                  id: verifiedStudent.id,
+                  email: verifiedStudent.email,
+                  full_name: verifiedStudent.full_name,
+                  role: 'student'
+                });
+                setStudentAuth(verifiedStudent);
+                setStudentProfile(verifiedStudent);
+              }
+
               setSession(null);
               setLoading(false);
               return;
             } else {
-              // Student not found or inactive, clear localStorage
+              // Student not found or inactive, clear all localStorage keys
+              console.log('Clearing invalid student session');
               localStorage.removeItem('student_session');
+              localStorage.removeItem('student_session_backup');
             }
           } catch (e) {
             console.error('Error parsing student session:', e);
+            // Clear all related localStorage keys on error
             localStorage.removeItem('student_session');
+            localStorage.removeItem('student_session_backup');
           }
         }
 
@@ -184,36 +216,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          const userType = await determineUserType(session.user.id, session.user.email!);
+          // Enhanced mobile session handling
+          if (isMobile) {
+            console.log('Mobile session detected - applying enhanced state management');
 
-          if (!isMounted) return;
+            // Multiple attempts to ensure session is properly set
+            for (let i = 0; i < 3; i++) {
+              const userType = await determineUserType(session.user.id, session.user.email!);
 
-          if (userType.type === 'teacher' && userType.profile) {
-            setProfile({
-              id: userType.profile.id,
-              email: userType.profile.email,
-              full_name: userType.profile.full_name,
-              role: 'teacher'
-            });
-            setStudentAuth(null);
-            setStudentProfile(null);
-          } else if (userType.type === 'student' && userType.profile) {
-            setProfile({
-              id: userType.profile.id,
-              email: userType.profile.email,
-              full_name: userType.profile.full_name,
-              role: 'student'
-            });
-            setStudentAuth(userType.profile);
-            setStudentProfile(userType.profile);
+              if (!isMounted) return;
 
-            // Store student session in localStorage for persistence
-            localStorage.setItem('student_session', JSON.stringify(userType.profile));
+              if (userType.type === 'teacher' && userType.profile) {
+                setProfile({
+                  id: userType.profile.id,
+                  email: userType.profile.email,
+                  full_name: userType.profile.full_name,
+                  role: 'teacher'
+                });
+                setStudentAuth(null);
+                setStudentProfile(null);
+
+                // Progressive delays for mobile stability
+                await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+              } else if (userType.type === 'student' && userType.profile) {
+                setProfile({
+                  id: userType.profile.id,
+                  email: userType.profile.email,
+                  full_name: userType.profile.full_name,
+                  role: 'student'
+                });
+                setStudentAuth(userType.profile);
+                setStudentProfile(userType.profile);
+
+                // Store student session in localStorage for persistence
+                localStorage.setItem('student_session', JSON.stringify(userType.profile));
+              } else {
+                console.warn('User not found in database tables');
+                setProfile(null);
+                setStudentAuth(null);
+                setStudentProfile(null);
+              }
+            }
           } else {
-            console.warn('User not found in database tables');
-            setProfile(null);
-            setStudentAuth(null);
-            setStudentProfile(null);
+            // Standard desktop handling
+            const userType = await determineUserType(session.user.id, session.user.email!);
+
+            if (!isMounted) return;
+
+            if (userType.type === 'teacher' && userType.profile) {
+              setProfile({
+                id: userType.profile.id,
+                email: userType.profile.email,
+                full_name: userType.profile.full_name,
+                role: 'teacher'
+              });
+              setStudentAuth(null);
+              setStudentProfile(null);
+            } else if (userType.type === 'student' && userType.profile) {
+              setProfile({
+                id: userType.profile.id,
+                email: userType.profile.email,
+                full_name: userType.profile.full_name,
+                role: 'student'
+              });
+              setStudentAuth(userType.profile);
+              setStudentProfile(userType.profile);
+
+              // Store student session in localStorage for persistence
+              localStorage.setItem('student_session', JSON.stringify(userType.profile));
+            } else {
+              console.warn('User not found in database tables');
+              setProfile(null);
+              setStudentAuth(null);
+              setStudentProfile(null);
+            }
           }
         } else {
           setProfile(null);
@@ -238,41 +314,72 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (event, session) => {
         if (!isMounted) return;
 
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
         try {
+          console.log('Auth state change:', event, { hasSession: !!session, isMobile });
+
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            const userType = await determineUserType(session.user.id, session.user.email!);
+            // Enhanced mobile handling for session establishment
+            if (isMobile && event === 'SIGNED_IN') {
+              console.log('Mobile teacher sign in detected - applying enhanced state management');
 
-            if (!isMounted) return;
+              // Multiple state update attempts for mobile stability
+              for (let i = 0; i < 3; i++) {
+                const userType = await determineUserType(session.user.id, session.user.email!);
 
-            if (userType.type === 'teacher' && userType.profile) {
-              setProfile({
-                id: userType.profile.id,
-                email: userType.profile.email,
-                full_name: userType.profile.full_name,
-                role: 'teacher'
-              });
-              setStudentAuth(null);
-              setStudentProfile(null);
-            } else if (userType.type === 'student' && userType.profile) {
-              setProfile({
-                id: userType.profile.id,
-                email: userType.profile.email,
-                full_name: userType.profile.full_name,
-                role: 'student'
-              });
-              setStudentAuth(userType.profile);
-              setStudentProfile(userType.profile);
+                if (!isMounted) return;
+
+                if (userType.type === 'teacher' && userType.profile) {
+                  setProfile({
+                    id: userType.profile.id,
+                    email: userType.profile.email,
+                    full_name: userType.profile.full_name,
+                    role: 'teacher'
+                  });
+                  setStudentAuth(null);
+                  setStudentProfile(null);
+
+                  // Progressive delays for mobile
+                  await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+                }
+              }
             } else {
-              console.warn('User not found during auth state change');
-              setProfile(null);
-              setStudentAuth(null);
-              setStudentProfile(null);
+              // Standard handling for non-mobile or other events
+              const userType = await determineUserType(session.user.id, session.user.email!);
+
+              if (!isMounted) return;
+
+              if (userType.type === 'teacher' && userType.profile) {
+                setProfile({
+                  id: userType.profile.id,
+                  email: userType.profile.email,
+                  full_name: userType.profile.full_name,
+                  role: 'teacher'
+                });
+                setStudentAuth(null);
+                setStudentProfile(null);
+              } else if (userType.type === 'student' && userType.profile) {
+                setProfile({
+                  id: userType.profile.id,
+                  email: userType.profile.email,
+                  full_name: userType.profile.full_name,
+                  role: 'student'
+                });
+                setStudentAuth(userType.profile);
+                setStudentProfile(userType.profile);
+              } else {
+                console.warn('User not found during auth state change');
+                setProfile(null);
+                setStudentAuth(null);
+                setStudentProfile(null);
+              }
             }
           } else {
             setProfile(null);
@@ -305,18 +412,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Teacher login using Supabase Auth
     // Only users who exist in auth.users (and users table) can login this way
     console.log('Attempting teacher login for:', email);
-    
+
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
-    
+
     console.log('Teacher login result:', { data, error });
-    
+
     if (error) {
       console.log('Teacher login failed:', error.message);
+      return { error };
     }
-    
+
+    // Enhanced mobile handling for teacher sessions
+    if (data.session && isMobile) {
+      console.log('Mobile teacher login - enhancing session persistence');
+
+      // Wait for session to be properly established
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Verify session is properly set
+      const { data: { session: verifySession }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !verifySession) {
+        console.warn('Session verification failed on mobile');
+        return { error: { message: 'Session tidak dapat diverifikasi pada perangkat mobile' } };
+      }
+
+      console.log('Mobile teacher session verified successfully');
+    }
+
     return { error };
   };
 
@@ -380,12 +508,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Store student session in localStorage for persistence across page refreshes
       localStorage.setItem('student_session', JSON.stringify(studentData));
 
-      // Force state update for mobile devices
+      // Enhanced mobile handling for better state persistence
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       if (isMobile) {
-        console.log('Mobile device detected, forcing state update');
-        // Force a small delay to ensure state is properly set
-        await new Promise(resolve => setTimeout(resolve, 50));
+        console.log('Mobile device detected, applying enhanced mobile handling');
+
+        // Multiple state update attempts for mobile stability
+        for (let i = 0; i < 3; i++) {
+          setStudentAuth(studentData);
+          setStudentProfile(studentData);
+          setProfile({
+            id: studentData.id,
+            email: studentData.email,
+            full_name: studentData.full_name,
+            role: 'student'
+          });
+          setUser(mockUser);
+
+          // Progressive delays for mobile stability
+          await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+        }
+
+        // Ensure localStorage is properly set
+        try {
+          localStorage.setItem('student_session', JSON.stringify(studentData));
+          localStorage.setItem('student_session_backup', JSON.stringify({
+            ...studentData,
+            timestamp: Date.now()
+          }));
+        } catch (storageError) {
+          console.warn('localStorage error on mobile:', storageError);
+        }
+      } else {
+        // Non-mobile: standard single update
+        setStudentAuth(studentData);
+        setStudentProfile(studentData);
+        setProfile({
+          id: studentData.id,
+          email: studentData.email,
+          full_name: studentData.full_name,
+          role: 'student'
+        });
+        setUser(mockUser);
+        localStorage.setItem('student_session', JSON.stringify(studentData));
       }
 
       setLoading(false);
