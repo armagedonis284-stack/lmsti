@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { BookOpen, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import AnimatedClassroomIllustration from "../ui/AnimatedClassroomIllustration";
@@ -110,6 +111,7 @@ const AlertBox: React.FC<{ type: "error" | "success"; message: string }> = ({
 );
 
 const AuthForm: React.FC = () => {
+  const navigate = useNavigate();
   const [authType, setAuthType] = useState<AuthType>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -118,7 +120,7 @@ const AuthForm: React.FC = () => {
   const [passwordError, setPasswordError] = useState("");
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
-  const { signIn, studentSignIn, studentForgotPassword, loading } = useAuth();
+  const { signIn, studentSignIn, studentForgotPassword, loading, profile } = useAuth();
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -167,21 +169,16 @@ const AuthForm: React.FC = () => {
           }
         }
 
-        // Force page refresh after successful login to ensure proper navigation
-        // This is especially important for mobile devices
-        console.log('Login successful, refreshing page...');
-        
-        // For mobile devices, use a more aggressive refresh approach
-        if (isMobile) {
-          console.log('Mobile device - using aggressive refresh');
-          setTimeout(() => {
-            window.location.href = window.location.origin;
-          }, 200);
-        } else {
-          setTimeout(() => {
-            window.location.reload();
-          }, 100);
-        }
+        // Navigate to appropriate dashboard after successful login
+        console.log('Login successful, navigating to dashboard...');
+
+        // Determine the correct dashboard path based on user role
+        const dashboardPath = profile?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+
+        // Use React Router navigation instead of page refresh
+        setTimeout(() => {
+          navigate(dashboardPath, { replace: true });
+        }, 100);
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
         if (error) throw error;
