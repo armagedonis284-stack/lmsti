@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { UserPlus, Trash2, ArrowLeft, Mail, Phone, Calendar, Upload, Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye } from 'lucide-react';
+import { UserPlus, Trash2, ArrowLeft, Mail, Phone, Calendar, Upload, Search, ChevronLeft, ChevronRight, ArrowUpDown, Eye, Download } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { hashPassword, generatePasswordFromBirthDate } from '../../utils/auth';
@@ -42,6 +42,7 @@ const ClassStudents: React.FC = () => {
   });
   const [saving, setSaving] = useState(false);
   const [showExcelImport, setShowExcelImport] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Table functionality
   const [searchTerm, setSearchTerm] = useState('');
@@ -206,6 +207,45 @@ const ClassStudents: React.FC = () => {
     }
   };
 
+  const handleExportClick = () => {
+    if (students.length === 0) {
+      alert('Tidak ada data siswa untuk diekspor');
+      return;
+    }
+    setShowExportModal(true);
+  };
+
+  const exportStudentCredentials = () => {
+    try {
+      // Generate CSV content
+      const csvHeader = 'No,Nama Lengkap,ID Siswa,Email,Password,Status\n';
+      const csvRows = students.map((student, index) => {
+        const password = generatePasswordFromBirthDate(student.birth_date);
+        const status = student.is_active ? 'Aktif' : 'Nonaktif';
+        return `${index + 1},"${student.full_name}","${student.student_id}","${student.email}","${password}","${status}"`;
+      }).join('\n');
+
+      const csvContent = csvHeader + csvRows;
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `kredensial_siswa_${classData?.grade}_${classData?.class_name}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      alert('Data kredensial siswa berhasil diekspor');
+      setShowExportModal(false);
+    } catch (error: any) {
+      console.error('Error exporting student credentials:', error);
+      alert('Gagal mengekspor data kredensial siswa');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6">
@@ -266,6 +306,16 @@ const ClassStudents: React.FC = () => {
 
           {/* Actions */}
           <div className="flex gap-3 w-full sm:w-auto">
+            <button
+              onClick={handleExportClick}
+              className="flex-1 sm:flex-none bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={students.length === 0}
+              title={students.length === 0 ? "Tidak ada data siswa untuk diekspor" : "Export kredensial siswa"}
+            >
+              <Download size={20} />
+              <span className="hidden sm:inline">Export Kredensial</span>
+              <span className="sm:hidden">Export</span>
+            </button>
             <button
               onClick={() => setShowExcelImport(true)}
               className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2"
@@ -522,6 +572,53 @@ const ClassStudents: React.FC = () => {
           }}
           onClose={() => setShowExcelImport(false)}
         />
+      )}
+
+      {/* Export Confirmation Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Export Kredensial Siswa</h3>
+
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-800 mb-2">
+                  <strong>Info:</strong> File CSV akan berisi data kredensial login semua siswa di kelas ini
+                </p>
+                <p className="text-sm text-blue-800">
+                  Data yang akan diekspor: Nama, ID Siswa, Email, Password (format tanggal lahir), dan Status
+                </p>
+                <p className="text-sm text-blue-800">
+                  <strong>Kelas:</strong> {classData?.grade} {classData?.class_name}
+                </p>
+                <p className="text-sm text-blue-800">
+                  <strong>Jumlah siswa:</strong> {students.length} siswa
+                </p>
+              </div>
+
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  <strong>Peringatan:</strong> File ini berisi informasi sensitif. Pastikan untuk menyimpannya dengan aman dan tidak membagikannya kepada pihak yang tidak berwenang.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={exportStudentCredentials}
+                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700"
+                >
+                  Export CSV
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -7,6 +7,7 @@ import {
   FileText,
   Trophy,
   User,
+  Users,
   Settings,
   X,
   FolderOpen,

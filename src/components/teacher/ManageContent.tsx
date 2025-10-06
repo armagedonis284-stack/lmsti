@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText, BookOpen, Edit, Trash2, Download, Eye, CheckCircle, Calendar, Filter } from 'lucide-react';
+import { Plus, FileText, BookOpen, Edit, Trash2, Download, Eye, CheckCircle, Calendar, Filter, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -193,6 +193,13 @@ const ManageContent: React.FC = () => {
           <p className="text-sm text-gray-600 mt-1">Kelola tugas dan materi pembelajaran</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => navigate('/teacher/additional-assignments')}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm"
+          >
+            <MessageSquare className="w-4 h-4" />
+            Diskusi Tugas Tambahan
+          </button>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as 'all' | 'assignments' | 'materials')}

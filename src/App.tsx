@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import ProtectedRoute, { UserRole } from "./components/ProtectedRoute";
 import Layout from "./components/layout/Layout";
+import LoadingScreen from "./components/ui/LoadingScreen";
 
 // Lazy load biar cepat load awal
 const AuthForm = lazy(() => import("./components/auth/AuthForm"));
@@ -23,21 +24,9 @@ const StudentDashboard = lazy(() => import("./components/student/StudentDashboar
 const StudentProfile = lazy(() => import("./components/student/StudentProfile"));
 const EditProfile = lazy(() => import("./components/student/EditProfile"));
 const StudentMaterials = lazy(() => import("./components/student/StudentMaterials"));
+const StudentAssignments = lazy(() => import("./components/student/StudentAssignments"));
+const AdditionalAssignments = lazy(() => import("./components/student/AdditionalAssignments"));
 const StudentLeaderboard = lazy(() => import("./components/student/StudentLeaderboard"));
-
-// Loader khusus
-const LoadingScreen: React.FC = () => (
-  <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-    <p className="text-gray-600 text-sm">Memuat aplikasi...</p>
-    <div className="mt-2 w-48 bg-gray-200 rounded-full h-1">
-      <div
-        className="bg-blue-600 h-1 rounded-full animate-pulse"
-        style={{ width: "60%" }}
-      ></div>
-    </div>
-  </div>
-);
 
 const AppContent: React.FC = () => {
   const { user, profile, loading } = useAuth();
@@ -71,6 +60,7 @@ const AppContent: React.FC = () => {
         <Route path="content" element={<ManageContent />} />
         <Route path="content/create" element={<CreateContent />} />
         <Route path="content/:id/edit" element={<EditContent />} />
+        <Route path="additional-assignments" element={<AdditionalAssignments />} />
         <Route path="leaderboard" element={<TeacherLeaderboard />} />
       </Route>
 
@@ -87,7 +77,8 @@ const AppContent: React.FC = () => {
         <Route path="profile" element={<StudentProfile />} />
         <Route path="edit-profile" element={<EditProfile />} />
         <Route path="materials" element={<StudentMaterials />} />
-        <Route path="assignments" element={<div className="p-6">Assignments - Coming Soon</div>} />
+        <Route path="assignments" element={<StudentAssignments />} />
+        <Route path="additional-assignments" element={<AdditionalAssignments />} />
         <Route path="grades" element={<StudentLeaderboard />} />
       </Route>
 

@@ -84,6 +84,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Simplified user type determination - single query approach
   const determineUserType = async (userId: string, email: string) => {
     try {
+      console.log('Determining user type for:', { userId, email });
+      
       // First check users table (teachers)
       const { data: userData, error: userError } = await supabase
         .from('users')
@@ -91,7 +93,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', userId)
         .single();
 
+      console.log('Users table query result:', { userData, userError });
+
       if (userData && !userError) {
+        console.log('User found in users table (teacher)');
         return { type: 'teacher' as const, profile: userData };
       }
 
@@ -103,12 +108,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('is_active', true)
         .single();
 
+      console.log('Students table query result:', { studentData, studentError });
+
       if (studentData && !studentError) {
+        console.log('User found in students table (student)');
         return { type: 'student' as const, profile: studentData };
       }
 
       // User not found in either table
-      console.warn('User not found in users or students table:', { userId, email });
+      console.warn('User not found in users or students table:', { userId, email, userError, studentError });
       return { type: null, profile: null };
     } catch (error) {
       console.error('Error in determineUserType:', error);
@@ -230,7 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         if (!isMounted) return;
 
         try {
@@ -296,16 +304,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     // Teacher login using Supabase Auth
     // Only users who exist in auth.users (and users table) can login this way
-    const { error } = await supabase.auth.signInWithPassword({
+    console.log('Attempting teacher login for:', email);
+    
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
+    
+    console.log('Teacher login result:', { data, error });
+    
+    if (error) {
+      console.log('Teacher login failed:', error.message);
+    }
+    
     return { error };
   };
 
   const studentSignIn = async (email: string, password: string) => {
     try {
       setLoading(true);
+      console.log('Attempting student login for:', email);
 
       // Students login directly from students table (no Supabase auth)
       const { data: studentData, error: studentError } = await supabase
@@ -315,15 +333,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('is_active', true)
         .single();
 
+      console.log('Student login query result:', { studentData, studentError });
+
       if (studentError || !studentData) {
+        console.log('Student not found or inactive:', studentError);
         setLoading(false);
         return { error: { message: 'Email tidak ditemukan atau akun tidak aktif' } };
       }
 
       // Simple password verification
+      console.log('Verifying password for student:', studentData.email);
       const isValidPassword = await verifyPassword(password, studentData.password);
+      console.log('Password verification result:', isValidPassword);
 
       if (!isValidPassword) {
+        console.log('Password verification failed');
         setLoading(false);
         return { error: { message: 'Password salah' } };
       }
@@ -391,7 +415,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const studentResetPassword = async (_token: string, newPassword: string) => {
+  const studentResetPassword = async (_token: string, _newPassword: string) => {
     try {
       // For now, we'll implement a simple password reset
       // In production, you'd want a proper token-based system
@@ -402,9 +426,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateStudentProfile = async (data: Partial<StudentProfile & { email: string; password?: string }>) => {
-    if (!user) return { error: { message: 'Not authenticated' } };
+    if (!user || !studentProfile) return { error: { message: 'Not authenticated' } };
 
     try {
+      console.log('Updating student profile:', { userId: user.id, data });
+      
       // Update student data in students table
       const updateData: any = {};
       if (data.email) updateData.email = data.email;
@@ -415,12 +441,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.password) updateData.password = await hashPassword(data.password);
       updateData.updated_at = new Date().toISOString();
 
+      console.log('Update data to send:', updateData);
+
+      // Use the student's current email to identify the record
+      // This works around RLS issues since students don't use Supabase Auth
       const { error: updateError } = await supabase
         .from('students')
         .update(updateData)
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .eq('email', studentProfile.email); // Additional security check
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
+
+      console.log('Update successful');
 
       // Refresh data for student
       const { data: studentData, error: fetchError } = await supabase
@@ -429,7 +465,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', user.id)
         .single();
 
+      console.log('Fetch updated data:', { studentData, fetchError });
+
       if (!fetchError && studentData) {
+        console.log('Updating state with new data');
+        
         // Update all state with new data
         setStudentAuth(studentData);
         setStudentProfile(studentData);
@@ -452,6 +492,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Update localStorage with new email for persistence
         localStorage.setItem('student_session', JSON.stringify(studentData));
+        
+        console.log('State updated successfully');
+      } else {
+        console.error('Failed to fetch updated data:', fetchError);
       }
 
       return { error: null };

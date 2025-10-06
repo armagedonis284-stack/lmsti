@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
+import AnimatedClassroomIllustration from "../ui/AnimatedClassroomIllustration";
 
 type AuthType = "login" | "forgot-password";
 
@@ -12,6 +13,11 @@ interface InputFieldProps {
   onChange: (value: string) => void;
   required?: boolean;
   autoFocus?: boolean;
+  placeholder?: string;
+  showPasswordToggle?: boolean;
+  onTogglePassword?: () => void;
+  showPassword?: boolean;
+  error?: string;
 }
 
 const InputField: React.FC<InputFieldProps> = ({
@@ -22,36 +28,84 @@ const InputField: React.FC<InputFieldProps> = ({
   onChange,
   required = false,
   autoFocus = false,
-}) => (
-  <div>
-    <label htmlFor={id} className="block text-sm font-medium text-gray-700">
-      {label}
-    </label>
-    <input
-      type={type}
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      required={required}
-      autoFocus={autoFocus}
-      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm
-                 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-    />
-  </div>
-);
+  placeholder,
+  showPasswordToggle = false,
+  onTogglePassword,
+  showPassword = false,
+  error,
+}) => {
+  const inputType = showPasswordToggle ? (showPassword ? "text" : "password") : type;
+  
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          {type === "email" ? (
+            <Mail className="h-5 w-5 text-gray-400" />
+          ) : type === "password" ? (
+            <Lock className="h-5 w-5 text-gray-400" />
+          ) : null}
+        </div>
+        <input
+          type={inputType}
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          required={required}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          className={`block w-full pl-10 pr-10 py-3 border rounded-lg shadow-sm placeholder-gray-400
+                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                     transition-colors duration-200 ${
+                       error 
+                         ? "border-red-300 focus:ring-red-500 focus:border-red-500" 
+                         : "border-gray-300 hover:border-gray-400"
+                     }`}
+        />
+        {showPasswordToggle && (
+          <button
+            type="button"
+            onClick={onTogglePassword}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+          >
+            {showPassword ? (
+              <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            ) : (
+              <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            )}
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="flex items-center space-x-1 text-red-600 text-sm">
+          <AlertCircle className="h-4 w-4" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AlertBox: React.FC<{ type: "error" | "success"; message: string }> = ({
   type,
   message,
 }) => (
   <div
-    className={`px-4 py-3 rounded mb-4 text-sm ${
+    className={`flex items-center space-x-2 px-4 py-3 rounded-lg mb-4 text-sm ${
       type === "error"
         ? "bg-red-50 border border-red-200 text-red-700"
         : "bg-green-50 border border-green-200 text-green-700"
     }`}
   >
-    {message}
+    {type === "error" ? (
+      <AlertCircle className="h-5 w-5 flex-shrink-0" />
+    ) : (
+      <CheckCircle className="h-5 w-5 flex-shrink-0" />
+    )}
+    <span>{message}</span>
   </div>
 );
 
@@ -59,14 +113,37 @@ const AuthForm: React.FC = () => {
   const [authType, setAuthType] = useState<AuthType>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string } | null>(null);
 
   const { signIn, studentSignIn, studentForgotPassword, loading } = useAuth();
-  const emailRef = useRef<HTMLInputElement>(null);
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFeedback(null);
+    setEmailError("");
+    setPasswordError("");
+
+    // Validation
+    if (!email) {
+      setEmailError("Email harus diisi");
+      return;
+    }
+    if (!validateEmail(email)) {
+      setEmailError("Format email tidak valid");
+      return;
+    }
+    if (authType === "login" && !password) {
+      setPasswordError("Password harus diisi");
+      return;
+    }
 
     try {
       if (authType === "login") {
@@ -93,89 +170,157 @@ const AuthForm: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-xl p-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <BookOpen className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-800">ClassRoom</h1>
-          <p className="text-gray-600 mt-2">
-            {authType === "login" ? "Login ke Sistem" : "Lupa Password"}
-          </p>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Left Side - Minimalist Branding */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 relative overflow-hidden">
+        {/* Subtle overlay */}
+        <div className="absolute inset-0 bg-black/10"></div>
+        
+        {/* Organic divider */}
+        <div className="absolute -right-12 top-0 bottom-0 w-24">
+          <svg className="h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0,0 Q20,20 0,40 Q20,60 0,80 Q20,90 0,100 L100,100 L100,0 Z" fill="#f9fafb" fillOpacity="0.08" />
+          </svg>
         </div>
+        
+         <div className="relative z-10 flex flex-col items-center justify-center text-white p-12 w-full">
+           {/* Main illustration */}
+           <div className="mb-12">
+             <AnimatedClassroomIllustration />
+           </div>
 
-        {feedback && <AlertBox type={feedback.type} message={feedback.message} />}
+          {/* Brand */}
+          <div className="text-center">
+            <h1 className="text-4xl font-bold mb-3">ClassRoom</h1>
+            <p className="text-lg text-blue-100 font-light">
+              Kelola kelas dengan lebih mudah
+            </p>
+          </div>
+        </div>
+        
+        {/* Subtle decorative blur */}
+        <div className="absolute bottom-20 left-20 w-40 h-40 bg-white/5 rounded-full blur-3xl"></div>
+        <div className="absolute top-20 right-32 w-32 h-32 bg-white/5 rounded-full blur-3xl"></div>
+      </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <InputField
-            id="email"
-            label="Email"
-            type="email"
-            value={email}
-            onChange={setEmail}
-            required
-            autoFocus
-          />
-
-          {authType === "login" && (
-            <InputField
-              id="password"
-              label="Password"
-              type="password"
-              value={password}
-              onChange={setPassword}
-              required
-            />
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium
-                       text-white bg-blue-600 hover:bg-blue-700
-                       focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500
-                       disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading
-              ? "Loading..."
-              : authType === "login"
-              ? "Login"
-              : "Reset Password"}
-          </button>
-        </form>
-
-        {/* Switcher */}
-        <div className="mt-6 text-center space-y-2">
-          {authType === "login" ? (
-            <button
-              onClick={() => setAuthType("forgot-password")}
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-            >
-              Lupa Password?
-            </button>
-          ) : (
-            <button
-              onClick={() => setAuthType("login")}
-              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-            >
-              Kembali ke Login
-            </button>
-          )}
-
-          {/* Notes */}
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-xs text-yellow-800">
-            <strong>Catatan:</strong> Sistem akan otomatis mendeteksi apakah Anda guru atau siswa.
-            <br />Akun siswa hanya bisa dibuat oleh guru melalui menu "Manage Siswa".
-            <br />Password default menggunakan format tanggal lahir (DDMMYYYY).
+      {/* Right Side - Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+        <div className="w-full max-w-md">
+          {/* Mobile Logo */}
+          <div className="lg:hidden text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <BookOpen className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800">ClassRoom</h1>
           </div>
 
-          {authType === "forgot-password" && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-800">
-              <strong>Info:</strong> Password akan direset ke tanggal lahir Anda dalam format DDMMYYYY.
-              <br />Contoh: lahir 15 Agustus 2005 → password <code>15082005</code>
+          {/* Form Header */}
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              {authType === "login" ? "Halo!" : "Reset Password"}
+            </h2>
+            <p className="text-gray-600">
+              {authType === "login" 
+                ? "Silakan login untuk melanjutkan" 
+                : "Kami akan kirim password baru ke email kamu"}
+            </p>
+          </div>
+
+          {feedback && <AlertBox type={feedback.type} message={feedback.message} />}
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <InputField
+                id="email"
+                label="Email"
+                type="email"
+                value={email}
+                onChange={setEmail}
+                required
+                autoFocus
+                placeholder="nama@email.com"
+                error={emailError}
+              />
+
+              {authType === "login" && (
+                <InputField
+                  id="password"
+                  label="Password"
+                  type="password"
+                  value={password}
+                  onChange={setPassword}
+                  required
+                  placeholder="Masukkan password"
+                  showPasswordToggle
+                  onTogglePassword={() => setShowPassword(!showPassword)}
+                  showPassword={showPassword}
+                  error={passwordError}
+                />
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 px-4 rounded-lg text-white font-semibold text-base
+                           bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700
+                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                           disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
+                           transform hover:scale-[1.01] active:scale-[0.99] shadow-md"
+              >
+                {loading ? (
+                  <div className="flex items-center justify-center">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Tunggu sebentar...
+                  </div>
+                ) : (
+                  authType === "login" ? "Masuk" : "Reset Password"
+                )}
+              </button>
+            </form>
+
+          {/* Footer */}
+          <div className="mt-6 text-center">
+            {authType === "login" ? (
+              <button
+                onClick={() => setAuthType("forgot-password")}
+                className="text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
+              >
+                Lupa password?
+              </button>
+            ) : (
+              <button
+                onClick={() => setAuthType("login")}
+                className="text-blue-600 hover:text-blue-700 font-medium text-sm transition-colors"
+              >
+                Kembali ke login
+              </button>
+            )}
+          </div>
+
+          {/* Info boxes - casual tone */}
+          <div className="mt-8 space-y-3">
+            <div className="p-3.5 bg-blue-50 rounded-lg text-sm">
+              <p className="text-blue-900">
+                <span className="font-semibold">💡 Info:</span> Sistem otomatis deteksi apakah kamu guru atau siswa dari email yang digunakan
+              </p>
             </div>
-          )}
+
+            {authType === "login" && (
+              <div className="p-3.5 bg-amber-50 rounded-lg text-sm">
+                <p className="text-amber-900">
+                  <span className="font-semibold">🔑 Password siswa:</span> Format tanggal lahir (DDMMYYYY), contoh: 15082005
+                </p>
+              </div>
+            )}
+
+            {authType === "forgot-password" && (
+              <div className="p-3.5 bg-green-50 rounded-lg text-sm">
+                <p className="text-green-900">
+                  <span className="font-semibold">✓ Password direset:</span> Ke tanggal lahir kamu (DDMMYYYY)
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

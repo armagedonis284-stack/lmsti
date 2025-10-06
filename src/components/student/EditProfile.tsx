@@ -1,17 +1,33 @@
-import React, { useState } from 'react';
-import { Save, Eye, EyeOff, User, Mail, Phone, MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Save, Eye, EyeOff, User, Mail, Phone, MapPin, Calendar } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const EditProfile: React.FC = () => {
   const { studentProfile, updateStudentProfile } = useAuth();
   const [formData, setFormData] = useState({
-    full_name: studentProfile?.full_name || '',
-    email: studentProfile?.email || '',
-    phone: studentProfile?.phone || '',
-    address: studentProfile?.address || '',
+    full_name: '',
+    email: '',
+    birth_date: '',
+    phone: '',
+    address: '',
     password: '',
     confirmPassword: ''
   });
+
+  // Update form data when studentProfile changes
+  useEffect(() => {
+    if (studentProfile) {
+      setFormData({
+        full_name: studentProfile.full_name || '',
+        email: studentProfile.email || '',
+        birth_date: studentProfile.birth_date || '',
+        phone: studentProfile.phone || '',
+        address: studentProfile.address || '',
+        password: '',
+        confirmPassword: ''
+      });
+    }
+  }, [studentProfile]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,8 +53,9 @@ const EditProfile: React.FC = () => {
       const updateData: any = {
         full_name: formData.full_name,
         email: formData.email,
-        phone: formData.phone || undefined,
-        address: formData.address || undefined,
+        birth_date: formData.birth_date,
+        phone: formData.phone || null,
+        address: formData.address || null,
       };
 
       if (formData.password) {
@@ -91,6 +108,21 @@ const EditProfile: React.FC = () => {
               type="text"
               value={formData.full_name}
               onChange={(e) => handleInputChange('full_name', e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+          </div>
+
+          {/* Tanggal Lahir */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Calendar size={16} />
+              Tanggal Lahir
+            </label>
+            <input
+              type="date"
+              value={formData.birth_date}
+              onChange={(e) => handleInputChange('birth_date', e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             />
