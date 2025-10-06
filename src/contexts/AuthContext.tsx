@@ -1,15 +1,17 @@
 /**
- * Simplified Authentication Context
+ * Optimized Authentication Context
  *
  * UNIFIED ARCHITECTURE:
- * - All users (teachers & students) use Supabase Auth for faster login
- * - Role determined by users table (teacher) or students table (student)
+ * - Teachers: Supabase Auth + users table
+ * - Students: students table only (no Supabase Auth)
+ * - Optimized for fast loading and minimal queries
  */
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { hashPassword, verifyPassword, generatePasswordFromBirthDate } from '../utils/auth';
+import { PerformanceMonitor } from '../utils/performance';
 
 interface UserProfile {
   id: string;
@@ -72,7 +74,7 @@ export const useAuth = () => {
   return context;
 };
 
-// Simplified Auth Provider - no complex caching or circuit breakers
+// Optimized Auth Provider with minimal queries and fast loading
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -81,310 +83,175 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Simplified user type determination - single query approach
-  const determineUserType = async (userId: string, email: string) => {
-    try {
-      console.log('Determining user type for:', { userId, email });
-      
-      // First check users table (teachers)
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('id, email, full_name')
-        .eq('id', userId)
-        .single();
+  // Optimized user type determination with performance monitoring
+  const determineUserType = useCallback(async (userId: string, email: string) => {
+    return PerformanceMonitor.measureAsync('determineUserType', async () => {
+      try {
+        console.log('Determining user type for:', { userId, email });
+        
+        // Check users table first (teachers)
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('id, email, full_name')
+          .eq('id', userId)
+          .single();
 
-      console.log('Users table query result:', { userData, userError });
+        if (userData && !userError) {
+          return { type: 'teacher' as const, profile: userData };
+        }
 
-      if (userData && !userError) {
-        console.log('User found in users table (teacher)');
-        return { type: 'teacher' as const, profile: userData };
+        // If not a teacher, check students table
+        const { data: studentData, error: studentError } = await supabase
+          .from('students')
+          .select('id, student_id, email, full_name, birth_date, phone, address, is_active, created_by')
+          .eq('email', email)
+          .eq('is_active', true)
+          .single();
+
+        if (studentData && !studentError) {
+          return { type: 'student' as const, profile: studentData };
+        }
+
+        // User not found in either table
+        console.warn('User not found in database tables');
+        return { type: null, profile: null };
+      } catch (error) {
+        console.error('Error in determineUserType:', error);
+        return { type: null, profile: null };
       }
+    });
+  }, []);
 
-      // If not a teacher, check students table
-      const { data: studentData, error: studentError } = await supabase
-        .from('students')
-        .select('id, student_id, email, full_name, birth_date, phone, address, is_active, created_by')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single();
-
-      console.log('Students table query result:', { studentData, studentError });
-
-      if (studentData && !studentError) {
-        console.log('User found in students table (student)');
-        return { type: 'student' as const, profile: studentData };
-      }
-
-      // User not found in either table
-      console.warn('User not found in users or students table:', { userId, email, userError, studentError });
-      return { type: null, profile: null };
-    } catch (error) {
-      console.error('Error in determineUserType:', error);
-      return { type: null, profile: null };
+  // Optimized state update function
+  const updateAuthState = useCallback((userType: { type: 'teacher' | 'student' | null; profile: any }) => {
+    if (userType.type === 'teacher' && userType.profile) {
+      setProfile({
+        id: userType.profile.id,
+        email: userType.profile.email,
+        full_name: userType.profile.full_name,
+        role: 'teacher'
+      });
+      setStudentAuth(null);
+      setStudentProfile(null);
+    } else if (userType.type === 'student' && userType.profile) {
+      setProfile({
+        id: userType.profile.id,
+        email: userType.profile.email,
+        full_name: userType.profile.full_name,
+        role: 'student'
+      });
+      setStudentAuth(userType.profile);
+      setStudentProfile(userType.profile);
+    } else {
+      setProfile(null);
+      setStudentAuth(null);
+      setStudentProfile(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
-    const getSession = async () => {
-      try {
-        // Enhanced localStorage handling for mobile devices
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-        // Try multiple localStorage keys for better mobile compatibility
-        let studentSession = localStorage.getItem('student_session');
-        if (!studentSession && isMobile) {
-          studentSession = localStorage.getItem('student_session_backup');
-        }
-
-        if (studentSession) {
-          try {
-            const studentData = JSON.parse(studentSession);
-
-            // Enhanced verification for mobile devices
-            const { data: verifiedStudent, error: verifyError } = await supabase
-              .from('students')
-              .select('*')
-              .eq('id', studentData.id)
-              .eq('email', studentData.email)
-              .eq('is_active', true)
-              .single();
-
-            if (!verifyError && verifiedStudent && isMounted) {
-              console.log('Student session restored successfully');
-
-              // Multiple state updates for mobile stability
-              if (isMobile) {
-                for (let i = 0; i < 2; i++) {
-                  setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
-                  setProfile({
-                    id: verifiedStudent.id,
-                    email: verifiedStudent.email,
-                    full_name: verifiedStudent.full_name,
-                    role: 'student'
-                  });
-                  setStudentAuth(verifiedStudent);
-                  setStudentProfile(verifiedStudent);
-
-                  // Small delay between updates for mobile
-                  await new Promise(resolve => setTimeout(resolve, 50));
-                }
-              } else {
-                setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
-                setProfile({
-                  id: verifiedStudent.id,
-                  email: verifiedStudent.email,
-                  full_name: verifiedStudent.full_name,
-                  role: 'student'
-                });
-                setStudentAuth(verifiedStudent);
-                setStudentProfile(verifiedStudent);
-              }
-
-              setSession(null);
-              setLoading(false);
-              return;
-            } else {
-              // Student not found or inactive, clear all localStorage keys
-              console.log('Clearing invalid student session');
-              localStorage.removeItem('student_session');
-              localStorage.removeItem('student_session_backup');
-            }
-          } catch (e) {
-            console.error('Error parsing student session:', e);
-            // Clear all related localStorage keys on error
-            localStorage.removeItem('student_session');
-            localStorage.removeItem('student_session_backup');
-          }
-        }
-
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          if (isMounted) {
-            setProfile(null);
-            setStudentAuth(null);
-            setStudentProfile(null);
-            setLoading(false);
-          }
-          return;
-        }
-
-        setSession(session);
-        setUser(session?.user ?? null);
-
-        if (session?.user) {
-          // Enhanced mobile session handling
-          if (isMobile) {
-            console.log('Mobile session detected - applying enhanced state management');
-
-            // Multiple attempts to ensure session is properly set
-            for (let i = 0; i < 3; i++) {
-              const userType = await determineUserType(session.user.id, session.user.email!);
-
-              if (!isMounted) return;
-
-              if (userType.type === 'teacher' && userType.profile) {
-                setProfile({
-                  id: userType.profile.id,
-                  email: userType.profile.email,
-                  full_name: userType.profile.full_name,
-                  role: 'teacher'
-                });
-                setStudentAuth(null);
-                setStudentProfile(null);
-
-                // Progressive delays for mobile stability
-                await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
-              } else if (userType.type === 'student' && userType.profile) {
-                setProfile({
-                  id: userType.profile.id,
-                  email: userType.profile.email,
-                  full_name: userType.profile.full_name,
-                  role: 'student'
-                });
-                setStudentAuth(userType.profile);
-                setStudentProfile(userType.profile);
-
-                // Store student session in localStorage for persistence
-                localStorage.setItem('student_session', JSON.stringify(userType.profile));
-              } else {
-                console.warn('User not found in database tables');
-                setProfile(null);
-                setStudentAuth(null);
-                setStudentProfile(null);
-              }
-            }
-          } else {
-            // Standard desktop handling
-            const userType = await determineUserType(session.user.id, session.user.email!);
-
-            if (!isMounted) return;
-
-            if (userType.type === 'teacher' && userType.profile) {
-              setProfile({
-                id: userType.profile.id,
-                email: userType.profile.email,
-                full_name: userType.profile.full_name,
-                role: 'teacher'
-              });
-              setStudentAuth(null);
-              setStudentProfile(null);
-            } else if (userType.type === 'student' && userType.profile) {
-              setProfile({
-                id: userType.profile.id,
-                email: userType.profile.email,
-                full_name: userType.profile.full_name,
-                role: 'student'
-              });
-              setStudentAuth(userType.profile);
-              setStudentProfile(userType.profile);
-
-              // Store student session in localStorage for persistence
-              localStorage.setItem('student_session', JSON.stringify(userType.profile));
-            } else {
-              console.warn('User not found in database tables');
-              setProfile(null);
-              setStudentAuth(null);
-              setStudentProfile(null);
-            }
-          }
-        } else {
-          setProfile(null);
-          setStudentAuth(null);
-          setStudentProfile(null);
-        }
-
-        if (isMounted) {
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error('Error in getSession:', error);
-        if (isMounted) {
-          setProfile(null);
-          setStudentAuth(null);
-          setStudentProfile(null);
-          setLoading(false);
-        }
-      }
-    };
-
-    getSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isMounted) return;
-
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
+    const initializeAuth = async () => {
+      return PerformanceMonitor.measureAsync('initializeAuth', async () => {
         try {
-          console.log('Auth state change:', event, { hasSession: !!session, isMobile });
+          // Check for student session first (faster)
+          const studentSession = localStorage.getItem('student_session');
+          if (studentSession) {
+            try {
+              const studentData = JSON.parse(studentSession);
+              
+              // Quick verification
+              const { data: verifiedStudent, error: verifyError } = await supabase
+                .from('students')
+                .select('*')
+                .eq('id', studentData.id)
+                .eq('email', studentData.email)
+                .eq('is_active', true)
+                .single();
+
+              if (!verifyError && verifiedStudent && isMounted) {
+                console.log('Student session restored');
+                setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
+                updateAuthState({ type: 'student', profile: verifiedStudent });
+                setSession(null);
+                setLoading(false);
+                return;
+              } else {
+                localStorage.removeItem('student_session');
+              }
+            } catch (e) {
+              console.error('Error parsing student session:', e);
+              localStorage.removeItem('student_session');
+            }
+          }
+
+          // Check Supabase session for teachers
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            if (isMounted) {
+              setLoading(false);
+            }
+            return;
+          }
 
           setSession(session);
           setUser(session?.user ?? null);
 
           if (session?.user) {
-            // Enhanced mobile handling for session establishment
-            if (isMobile && event === 'SIGNED_IN') {
-              console.log('Mobile teacher sign in detected - applying enhanced state management');
+            const userType = await determineUserType(session.user.id, session.user.email!);
+            
+            if (!isMounted) return;
 
-              // Multiple state update attempts for mobile stability
-              for (let i = 0; i < 3; i++) {
-                const userType = await determineUserType(session.user.id, session.user.email!);
+            updateAuthState(userType);
 
-                if (!isMounted) return;
-
-                if (userType.type === 'teacher' && userType.profile) {
-                  setProfile({
-                    id: userType.profile.id,
-                    email: userType.profile.email,
-                    full_name: userType.profile.full_name,
-                    role: 'teacher'
-                  });
-                  setStudentAuth(null);
-                  setStudentProfile(null);
-
-                  // Progressive delays for mobile
-                  await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
-                }
-              }
-            } else {
-              // Standard handling for non-mobile or other events
-              const userType = await determineUserType(session.user.id, session.user.email!);
-
-              if (!isMounted) return;
-
-              if (userType.type === 'teacher' && userType.profile) {
-                setProfile({
-                  id: userType.profile.id,
-                  email: userType.profile.email,
-                  full_name: userType.profile.full_name,
-                  role: 'teacher'
-                });
-                setStudentAuth(null);
-                setStudentProfile(null);
-              } else if (userType.type === 'student' && userType.profile) {
-                setProfile({
-                  id: userType.profile.id,
-                  email: userType.profile.email,
-                  full_name: userType.profile.full_name,
-                  role: 'student'
-                });
-                setStudentAuth(userType.profile);
-                setStudentProfile(userType.profile);
-              } else {
-                console.warn('User not found during auth state change');
-                setProfile(null);
-                setStudentAuth(null);
-                setStudentProfile(null);
-              }
+            // Store student session if needed
+            if (userType.type === 'student' && userType.profile) {
+              localStorage.setItem('student_session', JSON.stringify(userType.profile));
             }
           } else {
-            setProfile(null);
-            setStudentAuth(null);
-            setStudentProfile(null);
+            updateAuthState({ type: null, profile: null });
+          }
+
+          if (isMounted) {
+            setLoading(false);
+          }
+        } catch (error) {
+          console.error('Error in initializeAuth:', error);
+          if (isMounted) {
+            setLoading(false);
+          }
+        }
+      });
+    };
+
+    initializeAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!isMounted) return;
+
+        try {
+          console.log('Auth state change:', event, { hasSession: !!session });
+
+          setSession(session);
+          setUser(session?.user ?? null);
+
+          if (session?.user) {
+            const userType = await determineUserType(session.user.id, session.user.email!);
+            
+            if (!isMounted) return;
+
+            updateAuthState(userType);
+
+            // Store student session if needed
+            if (userType.type === 'student' && userType.profile) {
+              localStorage.setItem('student_session', JSON.stringify(userType.profile));
+            }
+          } else {
+            updateAuthState({ type: null, profile: null });
           }
 
           if (isMounted) {
@@ -393,9 +260,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
           console.error('Error in onAuthStateChange:', error);
           if (isMounted) {
-            setProfile(null);
-            setStudentAuth(null);
-            setStudentProfile(null);
             setLoading(false);
           }
         }
@@ -406,160 +270,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Empty dependency array to run only once on mount
+  }, [determineUserType, updateAuthState]);
 
   const signIn = async (email: string, password: string) => {
-    // Teacher login using Supabase Auth
-    // Only users who exist in auth.users (and users table) can login this way
-    console.log('Attempting teacher login for:', email);
+    return PerformanceMonitor.measureAsync('teacherSignIn', async () => {
+      console.log('Attempting teacher login for:', email);
 
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    console.log('Teacher login result:', { data, error });
-
-    if (error) {
-      console.log('Teacher login failed:', error.message);
-      return { error };
-    }
-
-    // Enhanced mobile handling for teacher sessions
-    if (data.session && isMobile) {
-      console.log('Mobile teacher login - enhancing session persistence');
-
-      // Wait for session to be properly established
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Verify session is properly set
-      const { data: { session: verifySession }, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError || !verifySession) {
-        console.warn('Session verification failed on mobile');
-        return { error: { message: 'Session tidak dapat diverifikasi pada perangkat mobile' } };
+      if (error) {
+        console.log('Teacher login failed:', error.message);
+        return { error };
       }
 
-      console.log('Mobile teacher session verified successfully');
-    }
-
-    return { error };
+      console.log('Teacher login successful');
+      return { error: null };
+    });
   };
 
   const studentSignIn = async (email: string, password: string) => {
-    try {
-      setLoading(true);
-      console.log('Attempting student login for:', email);
-      console.log('Environment check:', {
-        supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
-        supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
-        userAgent: navigator.userAgent,
-        isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-      });
+    return PerformanceMonitor.measureAsync('studentSignIn', async () => {
+      try {
+        setLoading(true);
+        console.log('Attempting student login for:', email);
 
-      // Students login directly from students table (no Supabase auth)
-      const { data: studentData, error: studentError } = await supabase
-        .from('students')
-        .select('*')
-        .eq('email', email)
-        .eq('is_active', true)
-        .single();
+        // Students login directly from students table (no Supabase auth)
+        const { data: studentData, error: studentError } = await supabase
+          .from('students')
+          .select('*')
+          .eq('email', email)
+          .eq('is_active', true)
+          .single();
 
-      console.log('Student login query result:', { studentData, studentError });
-
-      if (studentError || !studentData) {
-        console.log('Student not found or inactive:', studentError);
-        setLoading(false);
-        return { error: { message: 'Email tidak ditemukan atau akun tidak aktif' } };
-      }
-
-      // Simple password verification
-      console.log('Verifying password for student:', studentData.email);
-      const isValidPassword = await verifyPassword(password, studentData.password);
-      console.log('Password verification result:', isValidPassword);
-
-      if (!isValidPassword) {
-        console.log('Password verification failed');
-        setLoading(false);
-        return { error: { message: 'Password salah' } };
-      }
-
-      // Set auth state manually for students (no Supabase session)
-      setStudentAuth(studentData);
-      setStudentProfile(studentData);
-      setProfile({
-        id: studentData.id,
-        email: studentData.email,
-        full_name: studentData.full_name,
-        role: 'student'
-      });
-
-      // Create mock user object with updated email
-      const mockUser = {
-        id: studentData.id,
-        email: studentData.email
-      } as User;
-
-      setUser(mockUser);
-      setSession(null); // Students don't use Supabase sessions
-
-      // Store student session in localStorage for persistence across page refreshes
-      localStorage.setItem('student_session', JSON.stringify(studentData));
-
-      // Enhanced mobile handling for better state persistence
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      if (isMobile) {
-        console.log('Mobile device detected, applying enhanced mobile handling');
-
-        // Multiple state update attempts for mobile stability
-        for (let i = 0; i < 3; i++) {
-          setStudentAuth(studentData);
-          setStudentProfile(studentData);
-          setProfile({
-            id: studentData.id,
-            email: studentData.email,
-            full_name: studentData.full_name,
-            role: 'student'
-          });
-          setUser(mockUser);
-
-          // Progressive delays for mobile stability
-          await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
+        if (studentError || !studentData) {
+          console.log('Student not found or inactive:', studentError);
+          setLoading(false);
+          return { error: { message: 'Email tidak ditemukan atau akun tidak aktif' } };
         }
 
-        // Ensure localStorage is properly set
-        try {
-          localStorage.setItem('student_session', JSON.stringify(studentData));
-          localStorage.setItem('student_session_backup', JSON.stringify({
-            ...studentData,
-            timestamp: Date.now()
-          }));
-        } catch (storageError) {
-          console.warn('localStorage error on mobile:', storageError);
+        // Password verification
+        const isValidPassword = await verifyPassword(password, studentData.password);
+
+        if (!isValidPassword) {
+          console.log('Password verification failed');
+          setLoading(false);
+          return { error: { message: 'Password salah' } };
         }
-      } else {
-        // Non-mobile: standard single update
-        setStudentAuth(studentData);
-        setStudentProfile(studentData);
-        setProfile({
+
+        // Set auth state for students
+        const mockUser = {
           id: studentData.id,
-          email: studentData.email,
-          full_name: studentData.full_name,
-          role: 'student'
-        });
-        setUser(mockUser);
-        localStorage.setItem('student_session', JSON.stringify(studentData));
-      }
+          email: studentData.email
+        } as User;
 
-      setLoading(false);
-      return { error: null };
-    } catch (error) {
-      console.error('Error in studentSignIn:', error);
-      setLoading(false);
-      return { error: { message: error instanceof Error ? error.message : 'Terjadi kesalahan saat login' } };
-    }
+        setUser(mockUser);
+        setSession(null);
+        updateAuthState({ type: 'student', profile: studentData });
+
+        // Store session for persistence
+        localStorage.setItem('student_session', JSON.stringify(studentData));
+
+        setLoading(false);
+        return { error: null };
+      } catch (error) {
+        console.error('Error in studentSignIn:', error);
+        setLoading(false);
+        return { error: { message: error instanceof Error ? error.message : 'Terjadi kesalahan saat login' } };
+      }
+    });
   };
 
   const studentForgotPassword = async (email: string) => {
@@ -889,35 +670,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    // Check if user is a teacher (exists in users table)
-    if (user && profile) {
-      const { data: teacherData } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', user.id)
-        .single();
-
-      if (teacherData) {
-        // Teacher logout - use Supabase Auth
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-      } else {
-        // Student logout - manual logout and clear localStorage
-        localStorage.removeItem('student_session');
-        setUser(null);
-        setProfile(null);
-        setStudentAuth(null);
-        setStudentProfile(null);
-        setSession(null);
-      }
-    } else {
-      // Fallback - manual logout and clear localStorage
+    try {
+      // Clear student session
       localStorage.removeItem('student_session');
+      
+      // Clear all auth state
       setUser(null);
       setProfile(null);
       setStudentAuth(null);
       setStudentProfile(null);
       setSession(null);
+
+      // If it's a teacher session, also sign out from Supabase
+      if (session) {
+        await supabase.auth.signOut();
+      }
+    } catch (error) {
+      console.error('Error during sign out:', error);
     }
   };
 

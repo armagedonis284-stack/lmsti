@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import LoadingScreen from './ui/LoadingScreen';
 
 export enum UserRole {
   Teacher = 'teacher',
@@ -12,40 +13,20 @@ interface ProtectedRouteProps {
   requiredRole?: UserRole;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = memo(({ children, requiredRole }) => {
   const { user, profile, loading } = useAuth();
 
-  // Loading state dengan animasi
+  // Loading state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-gray-600 text-sm">Memuat aplikasi...</p>
-        <div className="mt-2 w-48 bg-gray-200 rounded-full h-1 overflow-hidden">
-          <div className="bg-blue-600 h-1 animate-progress"></div>
-        </div>
-        <style>
-          {`
-            @keyframes progress {
-              0% { transform: translateX(-100%); }
-              50% { transform: translateX(0%); }
-              100% { transform: translateX(100%); }
-            }
-            .animate-progress {
-              animation: progress 2s infinite;
-            }
-          `}
-        </style>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
-  // Belum login → render loading atau redirect ke home
+  // Not authenticated → redirect to home
   if (!user || !profile) {
     return <Navigate to="/" replace />;
   }
 
-  // Role tidak sesuai → redirect ke dashboard masing-masing
+  // Wrong role → redirect to appropriate dashboard
   if (requiredRole && profile.role !== requiredRole) {
     const redirectPath = profile.role === UserRole.Teacher 
       ? '/teacher/dashboard' 
@@ -53,8 +34,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     return <Navigate to={redirectPath} replace />;
   }
 
-  // Jika lolos semua pengecekan → render halaman
+  // All checks passed → render children
   return <>{children}</>;
-};
+});
 
 export default ProtectedRoute;
