@@ -31,10 +31,26 @@ const StudentLeaderboard = lazy(() => import("./components/student/StudentLeader
 const AppContent: React.FC = () => {
   const { user, profile, loading } = useAuth();
 
+  // Debug logging for mobile
+  const isMobile = typeof window !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  if (isMobile) {
+    console.log('AppContent render - Mobile device detected:', {
+      user: !!user,
+      profile: !!profile,
+      loading,
+      userAgent: navigator.userAgent
+    });
+  }
+
   if (loading) return <LoadingScreen />;
   if (!user || !profile) return <AuthForm />;
 
   const defaultPath = profile.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard";
+  
+  if (isMobile) {
+    console.log('Redirecting to default path:', defaultPath);
+  }
 
   return (
     <Routes>

@@ -40,9 +40,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
     );
   }
 
-  // Belum login → ke auth
+  // Belum login → render loading atau redirect ke home
   if (!user || !profile) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   // Role tidak sesuai → redirect ke dashboard masing-masing

@@ -166,6 +166,22 @@ const AuthForm: React.FC = () => {
             throw studentError;
           }
         }
+
+        // Force page refresh after successful login to ensure proper navigation
+        // This is especially important for mobile devices
+        console.log('Login successful, refreshing page...');
+        
+        // For mobile devices, use a more aggressive refresh approach
+        if (isMobile) {
+          console.log('Mobile device - using aggressive refresh');
+          setTimeout(() => {
+            window.location.href = window.location.origin;
+          }, 200);
+        } else {
+          setTimeout(() => {
+            window.location.reload();
+          }, 100);
+        }
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
         if (error) throw error;

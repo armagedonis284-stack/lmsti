@@ -380,6 +380,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Store student session in localStorage for persistence across page refreshes
       localStorage.setItem('student_session', JSON.stringify(studentData));
 
+      // Force state update for mobile devices
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        console.log('Mobile device detected, forcing state update');
+        // Force a small delay to ensure state is properly set
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
       setLoading(false);
       return { error: null };
     } catch (error) {
