@@ -7,4 +7,16 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    host: true,
+    port: 3000,
+  },
+  build: {
+    target: 'es2015',
+    minify: 'terser',
+    sourcemap: false,
+  },
+  define: {
+    global: 'globalThis',
+  },
 });

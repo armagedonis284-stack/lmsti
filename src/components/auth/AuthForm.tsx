@@ -147,13 +147,24 @@ const AuthForm: React.FC = () => {
 
     try {
       if (authType === "login") {
+        // Check if we're on mobile and add mobile-specific handling
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+          console.log('Mobile device detected, using mobile-optimized login');
+        }
+
         // Try teacher login first (Supabase Auth)
         const { error: teacherError } = await signIn(email, password);
 
         if (teacherError) {
+          console.log('Teacher login failed, trying student login:', teacherError.message);
           // If teacher login fails, try student login
           const { error: studentError } = await studentSignIn(email, password);
-          if (studentError) throw studentError;
+          if (studentError) {
+            console.error('Student login also failed:', studentError.message);
+            throw studentError;
+          }
         }
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
@@ -165,7 +176,19 @@ const AuthForm: React.FC = () => {
         setAuthType("login");
       }
     } catch (error: any) {
-      setFeedback({ type: "error", message: error.message || "Terjadi kesalahan" });
+      console.error('Login error:', error);
+      
+      // Mobile-specific error messages
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      let errorMessage = error.message || "Terjadi kesalahan";
+      
+      if (isMobile && error.message?.includes('fetch')) {
+        errorMessage = "Koneksi internet bermasalah. Pastikan HP terhubung ke internet dan coba lagi.";
+      } else if (isMobile && error.message?.includes('CORS')) {
+        errorMessage = "Masalah konfigurasi server. Silakan hubungi administrator.";
+      }
+      
+      setFeedback({ type: "error", message: errorMessage });
     }
   };
 

@@ -324,6 +324,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       console.log('Attempting student login for:', email);
+      console.log('Environment check:', {
+        supabaseUrl: !!import.meta.env.VITE_SUPABASE_URL,
+        supabaseKey: !!import.meta.env.VITE_SUPABASE_ANON_KEY,
+        userAgent: navigator.userAgent,
+        isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      });
 
       // Students login directly from students table (no Supabase auth)
       const { data: studentData, error: studentError } = await supabase
