@@ -12,6 +12,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { hashPassword, verifyPassword, generatePasswordFromBirthDate } from '../utils/auth';
 import { PerformanceMonitor } from '../utils/performance';
+import { safeLocalStorage, handleMobileError, isMobile } from '../utils/mobile';
 
 interface UserProfile {
   id: string;
@@ -151,81 +152,102 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
+    let isInitialized = false;
 
     const initializeAuth = async () => {
-      return PerformanceMonitor.measureAsync('initializeAuth', async () => {
-        try {
-          // Check for student session first (faster)
-          const studentSession = localStorage.getItem('student_session');
-          if (studentSession) {
-            try {
-              const studentData = JSON.parse(studentSession);
-              
-              // Quick verification
-              const { data: verifiedStudent, error: verifyError } = await supabase
-                .from('students')
-                .select('*')
-                .eq('id', studentData.id)
-                .eq('email', studentData.email)
-                .eq('is_active', true)
-                .single();
+      if (isInitialized) return;
+      isInitialized = true;
 
-              if (!verifyError && verifiedStudent && isMounted) {
-                console.log('Student session restored');
-                setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
-                updateAuthState({ type: 'student', profile: verifiedStudent });
-                setSession(null);
-                setLoading(false);
-                return;
-              } else {
-                localStorage.removeItem('student_session');
-              }
-            } catch (e) {
-              console.error('Error parsing student session:', e);
-              localStorage.removeItem('student_session');
-            }
-          }
+      try {
+        console.log('Initializing auth...', { 
+          isMobile: isMobile(),
+          userAgent: typeof window !== 'undefined' ? navigator.userAgent : 'server'
+        });
+        
+        // Check for student session first (faster) with mobile error handling
+        const studentSession = safeLocalStorage.getItem('student_session');
 
-          // Check Supabase session for teachers
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            if (isMounted) {
-              setLoading(false);
-            }
-            return;
-          }
-
-          setSession(session);
-          setUser(session?.user ?? null);
-
-          if (session?.user) {
-            const userType = await determineUserType(session.user.id, session.user.email!);
+        if (studentSession) {
+          try {
+            const studentData = JSON.parse(studentSession);
             
-            if (!isMounted) return;
+            // Quick verification
+            const { data: verifiedStudent, error: verifyError } = await supabase
+              .from('students')
+              .select('*')
+              .eq('id', studentData.id)
+              .eq('email', studentData.email)
+              .eq('is_active', true)
+              .single();
 
-            updateAuthState(userType);
-
-            // Store student session if needed
-            if (userType.type === 'student' && userType.profile) {
-              localStorage.setItem('student_session', JSON.stringify(userType.profile));
+            if (!verifyError && verifiedStudent && isMounted) {
+              console.log('Student session restored');
+              setUser({ id: verifiedStudent.id, email: verifiedStudent.email } as User);
+              updateAuthState({ type: 'student', profile: verifiedStudent });
+              setSession(null);
+              setLoading(false);
+              return;
+            } else {
+              console.log('Invalid student session, clearing...');
+              safeLocalStorage.removeItem('student_session');
             }
-          } else {
-            updateAuthState({ type: null, profile: null });
-          }
-
-          if (isMounted) {
-            setLoading(false);
-          }
-        } catch (error) {
-          console.error('Error in initializeAuth:', error);
-          if (isMounted) {
-            setLoading(false);
+          } catch (e) {
+            console.error('Error parsing student session:', e);
+            handleMobileError(e, 'student session parsing');
+            safeLocalStorage.removeItem('student_session');
           }
         }
-      });
+
+        // Check Supabase session for teachers
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          if (isMounted) {
+            setLoading(false);
+          }
+          return;
+        }
+
+        setSession(session);
+        setUser(session?.user ?? null);
+
+        if (session?.user) {
+          const userType = await determineUserType(session.user.id, session.user.email!);
+          
+          if (!isMounted) return;
+
+          updateAuthState(userType);
+
+          // Store student session if needed with mobile error handling
+          if (userType.type === 'student' && userType.profile) {
+            const success = safeLocalStorage.setItem('student_session', JSON.stringify(userType.profile));
+            if (!success) {
+              console.warn('Failed to store student session, continuing without persistence');
+            }
+          }
+        } else {
+          updateAuthState({ type: null, profile: null });
+        }
+
+        if (isMounted) {
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error in initializeAuth:', error);
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     };
+
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn('Auth initialization timeout, forcing loading to false');
+        setLoading(false);
+      }
+    }, 5000); // 5 second timeout
 
     initializeAuth();
 
@@ -246,9 +268,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             updateAuthState(userType);
 
-            // Store student session if needed
+            // Store student session if needed with mobile error handling
             if (userType.type === 'student' && userType.profile) {
-              localStorage.setItem('student_session', JSON.stringify(userType.profile));
+              const success = safeLocalStorage.setItem('student_session', JSON.stringify(userType.profile));
+              if (!success) {
+                console.warn('Failed to store student session, continuing without persistence');
+              }
             }
           } else {
             updateAuthState({ type: null, profile: null });
@@ -268,9 +293,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, [determineUserType, updateAuthState]);
+  }, []); // Empty dependency array to prevent re-renders
 
   const signIn = async (email: string, password: string) => {
     return PerformanceMonitor.measureAsync('teacherSignIn', async () => {
@@ -330,13 +356,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(null);
         updateAuthState({ type: 'student', profile: studentData });
 
-        // Store session for persistence
-        localStorage.setItem('student_session', JSON.stringify(studentData));
+        // Store session for persistence with error handling for mobile
+        const success = safeLocalStorage.setItem('student_session', JSON.stringify(studentData));
+        if (!success) {
+          console.warn('Failed to store student session, continuing without persistence');
+        }
 
         setLoading(false);
         return { error: null };
       } catch (error) {
         console.error('Error in studentSignIn:', error);
+        handleMobileError(error, 'studentSignIn');
         setLoading(false);
         return { error: { message: error instanceof Error ? error.message : 'Terjadi kesalahan saat login' } };
       }
@@ -671,8 +701,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      // Clear student session
-      localStorage.removeItem('student_session');
+      // Clear student session with mobile error handling
+      safeLocalStorage.removeItem('student_session');
       
       // Clear all auth state
       setUser(null);
