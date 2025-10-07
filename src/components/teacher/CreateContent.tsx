@@ -33,7 +33,6 @@ const CreateContent: React.FC = () => {
     class_id: '',
     grade: '',
     file_url: '',
-    link_url: '',
     // Assignment specific fields
     type: 'mandatory' as 'mandatory' | 'additional',
     due_date: '',
@@ -107,7 +106,6 @@ const CreateContent: React.FC = () => {
               type: formData.type,
               due_date: formData.due_date,
               max_score: formData.max_score,
-              link_url: formData.link_url || null,
               created_by: user?.id
             });
 
@@ -122,7 +120,6 @@ const CreateContent: React.FC = () => {
             type: formData.type,
             due_date: formData.due_date,
             max_score: formData.max_score,
-            link_url: formData.link_url || null,
             created_by: user?.id
           }));
 
@@ -142,7 +139,6 @@ const CreateContent: React.FC = () => {
             description: formData.description,
             content: formData.content,
             file_url: formData.file_url,
-            link_url: formData.link_url || null,
             class_id: formData.class_id,
             created_by: user?.id
           });
@@ -364,22 +360,6 @@ const CreateContent: React.FC = () => {
             </>
           )}
 
-          {/* Link URL field for both assignments and materials */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Link Pendukung (Opsional)
-            </label>
-            <input
-              type="url"
-              value={formData.link_url}
-              onChange={(e) => setFormData(prev => ({ ...prev, link_url: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="https://example.com/resource"
-            />
-            <p className="mt-1 text-sm text-gray-500">
-              Masukkan link ke sumber daya, video, atau materi pendukung
-            </p>
-          </div>
 
           {/* Material specific fields */}
           {contentType === 'material' && (

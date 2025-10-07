@@ -13,7 +13,6 @@ export interface ContentFormData {
   class_id: string;
   grade: string;
   file_url: string;
-  link_url?: string;
   type: 'mandatory' | 'additional';
   due_date: string;
   max_score: number;

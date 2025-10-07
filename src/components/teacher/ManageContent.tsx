@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, FileText, BookOpen, Edit, Trash2, Download, Eye, CheckCircle, Calendar, Filter, MessageSquare } from 'lucide-react';
+import { Plus, FileText, BookOpen, Edit, Trash2, Download, Eye, CheckCircle, Calendar, Filter, Users, Trophy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { ContentCardSkeleton } from '../ui/SkeletonLoader';
 
@@ -193,13 +193,6 @@ const ManageContent: React.FC = () => {
           <p className="text-sm text-gray-600 mt-1">Kelola tugas dan materi pembelajaran</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
-          <button
-            onClick={() => navigate('/teacher/additional-assignments')}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 text-sm"
-          >
-            <MessageSquare className="w-4 h-4" />
-            Diskusi Tugas Tambahan
-          </button>
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value as 'all' | 'assignments' | 'materials')}
@@ -332,8 +325,8 @@ const ManageContent: React.FC = () => {
                 </span>
                 {item.content_type === 'assignment' && (
                   <div className="flex items-center gap-1">
-                    <CheckCircle size={14} />
-                    <span>{(item as Assignment).graded_count || 0}/{(item as Assignment).submission_count || 0} Dinilai</span>
+                    <Users size={14} />
+                    <span>{(item as Assignment).submission_count || 0} Pengumpulan</span>
                   </div>
                 )}
               </div>

@@ -1,17 +1,23 @@
 /**
- * Simplified Authentication Context
+ * Enhanced Authentication Context
  *
  * UNIFIED ARCHITECTURE:
  * - Teachers: Supabase Auth + users table
  * - Students: students table only (no Supabase Auth)
- * - Simplified for better mobile compatibility
+ * - Enhanced with proper session management and cleanup
  */
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { hashPassword, verifyPassword, generatePasswordFromBirthDate } from '../utils/auth';
-import { safeLocalStorage, handleMobileError } from '../utils/mobile';
+import { handleMobileError } from '../utils/mobile';
+import { 
+  clearAuthStorage, 
+  storeStudentSession, 
+  getStudentSession, 
+  storeAuthState
+} from '../utils/authStorage';
 
 interface UserProfile {
   id: string;
@@ -155,18 +161,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Initializing auth...');
         
         // Check for student session first (faster)
-        const studentSession = safeLocalStorage.getItem('student_session');
+        const studentSession = getStudentSession();
 
         if (studentSession) {
           try {
-            const studentData = JSON.parse(studentSession);
-            
             // Quick verification
             const { data: verifiedStudent, error: verifyError } = await supabase
               .from('students')
               .select('*')
-              .eq('id', studentData.id)
-              .eq('email', studentData.email)
+              .eq('id', studentSession.id)
+              .eq('email', studentSession.email)
               .eq('is_active', true)
               .single();
 
@@ -176,15 +180,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               updateAuthState({ type: 'student', profile: verifiedStudent });
               setSession(null);
               setLoading(false);
+              
+              // Store auth state for debugging
+              storeAuthState({ 
+                action: 'restoreStudentSession', 
+                userId: verifiedStudent.id,
+                timestamp: new Date().toISOString() 
+              });
               return;
             } else {
               console.log('Invalid student session, clearing...');
-              safeLocalStorage.removeItem('student_session');
+              clearAuthStorage();
             }
           } catch (e) {
             console.error('Error parsing student session:', e);
             handleMobileError(e, 'student session parsing');
-            safeLocalStorage.removeItem('student_session');
+            clearAuthStorage();
           }
         }
 
@@ -211,7 +222,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Store student session if needed
           if (userType.type === 'student' && userType.profile) {
-            safeLocalStorage.setItem('student_session', JSON.stringify(userType.profile));
+            storeStudentSession(userType.profile);
           }
         } else {
           updateAuthState({ type: null, profile: null });
@@ -250,7 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // Store student session if needed
             if (userType.type === 'student' && userType.profile) {
-              safeLocalStorage.setItem('student_session', JSON.stringify(userType.profile));
+              storeStudentSession(userType.profile);
             }
           } else {
             updateAuthState({ type: null, profile: null });
@@ -330,7 +341,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateAuthState({ type: 'student', profile: studentData });
 
       // Store session for persistence
-      safeLocalStorage.setItem('student_session', JSON.stringify(studentData));
+      storeStudentSession(studentData);
 
       setLoading(false);
       return { error: null };
@@ -450,7 +461,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(updatedMockUser);
 
         // Update localStorage with new email for persistence
-        localStorage.setItem('student_session', JSON.stringify(studentData));
+        storeStudentSession(studentData);
         
         console.log('State updated successfully');
       } else {
@@ -670,22 +681,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      // Clear student session with mobile error handling
-      safeLocalStorage.removeItem('student_session');
+      console.log('Starting sign out process...');
       
-      // Clear all auth state
+      // Clear all authentication storage
+      clearAuthStorage();
+      
+      // Clear all auth state immediately
       setUser(null);
       setProfile(null);
       setStudentAuth(null);
       setStudentProfile(null);
       setSession(null);
+      setLoading(false);
 
-      // If it's a teacher session, also sign out from Supabase
+      // Sign out from Supabase (for teachers)
       if (session) {
+        console.log('Signing out from Supabase...');
         await supabase.auth.signOut();
       }
+
+      // Store auth state for debugging
+      storeAuthState({ 
+        action: 'signOut', 
+        timestamp: new Date().toISOString(),
+        cleared: true 
+      });
+
+      console.log('Sign out completed successfully');
     } catch (error) {
       console.error('Error during sign out:', error);
+      handleMobileError(error, 'signOut');
+      
+      // Even if there's an error, clear local state
+      setUser(null);
+      setProfile(null);
+      setStudentAuth(null);
+      setStudentProfile(null);
+      setSession(null);
+      setLoading(false);
     }
   };
 

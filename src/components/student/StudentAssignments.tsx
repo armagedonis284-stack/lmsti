@@ -13,9 +13,9 @@ import {
   Filter,
   Search,
   Trophy,
-  MessageSquare
+  Plus
 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 
 interface Assignment {
@@ -27,9 +27,13 @@ interface Assignment {
   max_score: number;
   class_id: string;
   created_at: string;
+  created_by?: string;
   class?: {
     grade: string;
     class_name: string;
+  };
+  teacher?: {
+    full_name: string;
   };
   submission?: {
     id: string;
@@ -37,16 +41,34 @@ interface Assignment {
     file_url: string;
     submitted_at: string;
   };
+  submissions?: {
+    id: string;
+    content: string;
+    file_url: string;
+    submitted_at: string;
+    student: {
+      full_name: string;
+      student_id: string;
+    };
+  }[];
   score?: {
     score: number;
     max_score: number;
     feedback: string;
     graded_at: string;
   };
+  scores?: {
+    score: number;
+    max_score: number;
+    feedback: string;
+    graded_at: string;
+  }[];
+  submission_count?: number;
+  graded_count?: number;
 }
 
 const StudentAssignments: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'submitted' | 'graded'>('all');
@@ -55,6 +77,9 @@ const StudentAssignments: React.FC = () => {
   const [submissionContent, setSubmissionContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Determine if user is teacher or student
+  const isTeacher = profile?.role === 'teacher';
 
   useEffect(() => {
     if (user) {
@@ -68,15 +93,27 @@ const StudentAssignments: React.FC = () => {
     try {
       setLoading(true);
 
-      // Get student's classes
-      const { data: studentClasses, error: classesError } = await supabase
-        .from('students_classes')
-        .select('class_id')
-        .eq('student_id', user.id);
-      
-      if (classesError) throw classesError;
+      let classIds: string[] = [];
 
-      const classIds = studentClasses?.map(sc => sc.class_id) || [];
+      if (isTeacher) {
+        // For teachers, get all their classes
+        const { data: teacherClasses, error: classesError } = await supabase
+          .from('classes')
+          .select('id')
+          .eq('teacher_id', user.id);
+        
+        if (classesError) throw classesError;
+        classIds = teacherClasses?.map(c => c.id) || [];
+      } else {
+        // For students, get their enrolled classes
+        const { data: studentClasses, error: classesError } = await supabase
+          .from('students_classes')
+          .select('class_id')
+          .eq('student_id', user.id);
+        
+        if (classesError) throw classesError;
+        classIds = studentClasses?.map(sc => sc.class_id) || [];
+      }
       
       if (classIds.length === 0) {
         setAssignments([]);
@@ -89,13 +126,15 @@ const StudentAssignments: React.FC = () => {
         .select(`
           *,
           class:classes(grade, class_name),
-          submissions!submissions_assignment_id_fkey(
+          teacher:users(full_name),
+          submissions(
             id,
             content,
             file_url,
-            submitted_at
+            submitted_at,
+            student:students(full_name, student_id)
           ),
-          scores!scores_assignment_id_fkey(
+          scores(
             score,
             max_score,
             feedback,
@@ -108,11 +147,28 @@ const StudentAssignments: React.FC = () => {
       if (assignmentsError) throw assignmentsError;
 
       // Process assignments data
-      const processedAssignments: Assignment[] = assignmentsData?.map(assignment => ({
-        ...assignment,
-        submission: assignment.submissions?.[0] || null,
-        score: assignment.scores?.[0] || null,
-      })) || [];
+      const processedAssignments: Assignment[] = assignmentsData?.map(assignment => {
+        if (isTeacher) {
+          // For teachers, show submission count and graded count
+          return {
+            ...assignment,
+            submission_count: assignment.submissions?.length || 0,
+            graded_count: assignment.scores?.length || 0,
+            submissions: assignment.submissions || [],
+            scores: assignment.scores || [],
+          };
+        } else {
+          // For students, find their own submission and score
+          const userSubmission = assignment.submissions?.find(sub => sub.student?.student_id === user.id || sub.student?.id === user.id);
+          const userScore = assignment.scores?.find(score => score.student_id === user.id);
+          
+          return {
+            ...assignment,
+            submission: userSubmission || null,
+            score: userScore || null,
+          };
+        }
+      }) || [];
 
       setAssignments(processedAssignments);
     } catch (error) {
@@ -131,15 +187,41 @@ const StudentAssignments: React.FC = () => {
     try {
       setSubmitting(true);
 
+      // Try direct insert first
       const { error } = await supabase
         .from('submissions')
-        .upsert({
+        .insert({
           assignment_id: assignmentId,
           student_id: user.id,
           content: submissionContent.trim(),
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Submission error details:', error);
+        
+        // If RLS fails, try using the database function
+        if (error.code === '42501') {
+          console.log('RLS failed, trying database function...');
+          
+          const { data: functionResult, error: functionError } = await supabase
+            .rpc('submit_assignment', {
+              p_assignment_id: assignmentId,
+              p_student_id: user.id,
+              p_content: submissionContent.trim()
+            });
+
+          if (functionError) {
+            console.error('Function error:', functionError);
+            throw new Error('Tidak dapat mengirim tugas. Silakan coba lagi atau hubungi guru.');
+          }
+
+          if (functionResult && !functionResult.success) {
+            throw new Error(functionResult.error || 'Gagal mengirim tugas');
+          }
+        } else {
+          throw error;
+        }
+      }
 
       alert('Tugas berhasil dikumpulkan!');
       setSelectedAssignment(null);
@@ -147,7 +229,7 @@ const StudentAssignments: React.FC = () => {
       fetchAssignments(); // Refresh assignments
     } catch (error) {
       console.error('Error submitting assignment:', error);
-      alert('Gagal mengumpulkan tugas');
+      alert(error instanceof Error ? error.message : 'Gagal mengumpulkan tugas');
     } finally {
       setSubmitting(false);
     }
@@ -176,14 +258,40 @@ const StudentAssignments: React.FC = () => {
       // Update submission with file URL
       const { error: updateError } = await supabase
         .from('submissions')
-        .upsert({
+        .insert({
           assignment_id: assignmentId,
           student_id: user?.id,
           content: submissionContent.trim(),
           file_url: publicUrl,
         });
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('File upload submission error:', updateError);
+        
+        // If RLS fails, try using the database function
+        if (updateError.code === '42501') {
+          console.log('RLS failed for file upload, trying database function...');
+          
+          const { data: functionResult, error: functionError } = await supabase
+            .rpc('submit_assignment', {
+              p_assignment_id: assignmentId,
+              p_student_id: user?.id,
+              p_content: submissionContent.trim(),
+              p_file_url: publicUrl
+            });
+
+          if (functionError) {
+            console.error('Function error for file upload:', functionError);
+            throw new Error('Tidak dapat mengirim file. Silakan coba lagi atau hubungi guru.');
+          }
+
+          if (functionResult && !functionResult.success) {
+            throw new Error(functionResult.error || 'Gagal mengirim file');
+          }
+        } else {
+          throw updateError;
+        }
+      }
 
       alert('File berhasil diupload!');
       setSelectedAssignment(null);
@@ -203,31 +311,59 @@ const StudentAssignments: React.FC = () => {
     
     if (!matchesSearch) return false;
 
-    switch (filter) {
-      case 'pending':
-        return !assignment.submission;
-      case 'submitted':
-        return assignment.submission && !assignment.score;
-      case 'graded':
-        return assignment.score;
-      default:
-        return true;
+    if (isTeacher) {
+      // For teachers, filter by submission status
+      switch (filter) {
+        case 'pending':
+          return (assignment.submission_count || 0) === 0;
+        case 'submitted':
+          return (assignment.submission_count || 0) > 0 && (assignment.graded_count || 0) === 0;
+        case 'graded':
+          return (assignment.graded_count || 0) > 0;
+        default:
+          return true;
+      }
+    } else {
+      // For students, filter by their own submission status
+      switch (filter) {
+        case 'pending':
+          return !assignment.submission;
+        case 'submitted':
+          return assignment.submission && !assignment.score;
+        case 'graded':
+          return assignment.score;
+        default:
+          return true;
+      }
     }
   });
 
   const getAssignmentStatus = (assignment: Assignment) => {
-    if (assignment.score) {
-      return { status: 'graded', color: 'text-green-600', bgColor: 'bg-green-100' };
+    if (isTeacher) {
+      // For teachers, show overall assignment status
+      if ((assignment.graded_count || 0) > 0) {
+        return { status: 'graded', color: 'text-green-600', bgColor: 'bg-green-100' };
+      }
+      if ((assignment.submission_count || 0) > 0) {
+        return { status: 'submitted', color: 'text-blue-600', bgColor: 'bg-blue-100' };
+      }
+      return { status: 'pending', color: 'text-red-600', bgColor: 'bg-red-100' };
+    } else {
+      // For students, show their own status
+      if (assignment.score) {
+        return { status: 'graded', color: 'text-green-600', bgColor: 'bg-green-100' };
+      }
+      if (assignment.submission) {
+        return { status: 'submitted', color: 'text-blue-600', bgColor: 'bg-blue-100' };
+      }
+      return { status: 'pending', color: 'text-red-600', bgColor: 'bg-red-100' };
     }
-    if (assignment.submission) {
-      return { status: 'submitted', color: 'text-blue-600', bgColor: 'bg-blue-100' };
-    }
-    return { status: 'pending', color: 'text-red-600', bgColor: 'bg-red-100' };
   };
 
   const isOverdue = (dueDate: string) => {
     return new Date(dueDate) < new Date();
   };
+
 
   if (loading) {
     return (
@@ -240,14 +376,18 @@ const StudentAssignments: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Tugas Saya</h1>
-        <button
-          onClick={() => window.location.href = '/student/additional-assignments'}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-        >
-          <MessageSquare className="w-4 h-4" />
-          Tugas Tambahan
-        </button>
+        <h1 className="text-2xl font-bold text-gray-800">
+          {isTeacher ? 'Kelola Tugas' : 'Tugas Saya'}
+        </h1>
+        {isTeacher && (
+          <button
+            onClick={() => window.location.href = '/teacher/content/create'}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Buat Tugas Baru
+          </button>
+        )}
       </div>
 
       {/* Filters and Search */}
@@ -340,23 +480,46 @@ const StudentAssignments: React.FC = () => {
                           minute: '2-digit' 
                         })}
                       </div>
-                      {overdue && !assignment.submission && (
+                      {overdue && !isTeacher && !assignment.submission && (
                         <span className="text-red-600 font-medium">Terlambat!</span>
+                      )}
+                      {isTeacher && (
+                        <div className="flex items-center gap-1">
+                          <Users className="w-4 h-4" />
+                          <span>{(assignment.submission_count || 0)} Pengumpulan</span>
+                        </div>
                       )}
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => setSelectedAssignment(assignment)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      {assignment.submission ? 'Lihat' : 'Kerjakan'}
-                    </button>
+                    {isTeacher ? (
+                      <>
+                        <button
+                          onClick={() => window.location.href = `/teacher/assignments/${assignment.id}/submissions`}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          Lihat Pengumpulan
+                        </button>
+                        <button
+                          onClick={() => window.location.href = `/teacher/assignments/${assignment.id}/grade`}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          Penilaian
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedAssignment(assignment)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        {assignment.submission ? 'Lihat' : 'Kerjakan'}
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                {/* Score Display */}
-                {assignment.score && (
+                {/* Score Display - Only for students */}
+                {!isTeacher && assignment.score && (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -384,8 +547,8 @@ const StudentAssignments: React.FC = () => {
                   </div>
                 )}
 
-                {/* Submission Display */}
-                {assignment.submission && (
+                {/* Submission Display - Only for students */}
+                {!isTeacher && assignment.submission && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h4 className="font-medium text-blue-800 mb-2">Submission Anda</h4>
                     <p className="text-sm text-blue-700 mb-2">
@@ -413,8 +576,8 @@ const StudentAssignments: React.FC = () => {
         )}
       </div>
 
-      {/* Assignment Modal */}
-      {selectedAssignment && (
+      {/* Assignment Modal - Only for students */}
+      {!isTeacher && selectedAssignment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">

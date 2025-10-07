@@ -11,7 +11,8 @@ import {
   Settings,
   X,
   FolderOpen,
-  GraduationCap
+  GraduationCap,
+  Award
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -37,6 +38,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, isTeacher, currentPath, onClo
       title: 'Kelola Konten',
       icon: FileText,
       path: '/teacher/content',
+    },
+    {
+      title: 'Pengelolaan Nilai',
+      icon: Award,
+      path: '/teacher/grades',
     },
     {
       title: 'Leaderboard',

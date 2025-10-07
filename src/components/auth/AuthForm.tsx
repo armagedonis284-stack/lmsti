@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
+import { useAuth } from "../../hooks/useAuth";
+import { getAndClearRedirectPath } from "../../utils/authStorage";
 import { BookOpen, Eye, EyeOff, Mail, Lock, AlertCircle, CheckCircle } from "lucide-react";
 import AnimatedClassroomIllustration from "../ui/AnimatedClassroomIllustration";
 
@@ -180,8 +181,12 @@ const AuthForm: React.FC = () => {
 
         // Navigate after short delay
         setTimeout(() => {
+          // Get redirect path or use default dashboard
+          const redirectPath = getAndClearRedirectPath();
           const dashboardPath = profile?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
-          navigate(dashboardPath, { replace: true });
+          const finalPath = redirectPath || dashboardPath;
+          
+          navigate(finalPath, { replace: true });
         }, 1000);
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
