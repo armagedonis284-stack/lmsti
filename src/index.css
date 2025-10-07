@@ -2,9 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile-specific improvements */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Prevent zoom on input focus on iOS */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Custom utility classes */
 @layer utilities {
   .menu-item-hover {
     @apply transform transition-transform duration-200 hover:scale-[1.02] hover:shadow-md;
+  }
+  
+  .touch-manipulation {
+    touch-action: manipulation;
   }
 }

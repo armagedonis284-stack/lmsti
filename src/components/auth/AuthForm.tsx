@@ -58,13 +58,14 @@ const InputField: React.FC<InputFieldProps> = ({
           required={required}
           autoFocus={autoFocus}
           placeholder={placeholder}
-          className={`block w-full pl-10 pr-10 py-3 border rounded-lg shadow-sm placeholder-gray-400
+          className={`block w-full pl-10 pr-10 py-4 border rounded-lg shadow-sm placeholder-gray-400 text-base
                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
-                     transition-colors duration-200 ${
+                     transition-colors duration-200 touch-manipulation ${
                        error 
                          ? "border-red-300 focus:ring-red-500 focus:border-red-500" 
                          : "border-gray-300 hover:border-gray-400"
                      }`}
+          style={{ fontSize: '16px' }} // Prevents zoom on iOS
         />
         {showPasswordToggle && (
           <button
@@ -133,9 +134,6 @@ const AuthForm: React.FC = () => {
     setEmailError("");
     setPasswordError("");
 
-    // Check if we're on mobile for enhanced error handling
-    const deviceIsMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
     // Validation
     if (!email) {
       setEmailError("Email harus diisi");
@@ -152,11 +150,6 @@ const AuthForm: React.FC = () => {
 
     try {
       if (authType === "login") {
-
-        if (deviceIsMobile) {
-          console.log('Mobile device detected, using mobile-optimized login');
-        }
-
         // Try teacher login first (Supabase Auth)
         const { error: teacherError } = await signIn(email, password);
 
@@ -168,40 +161,16 @@ const AuthForm: React.FC = () => {
             console.error('Student login also failed:', studentError.message);
             throw studentError;
           }
-        } else {
-          // Teacher login successful - wait for session to be fully established
-          console.log('Teacher login successful - waiting for session establishment');
-
-          if (deviceIsMobile) {
-            // Extra delay for mobile teacher sessions
-            console.log('Mobile teacher login - waiting longer for session...');
-            await new Promise(resolve => setTimeout(resolve, 800));
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
         }
 
-        // Enhanced mobile navigation handling
+        // Simple navigation after successful login
         console.log('Login successful, navigating to dashboard...');
-        console.log('Current profile state:', {
-          hasProfile: !!profile,
-          role: profile?.role,
-          isMobile: deviceIsMobile
-        });
-
+        
         // Determine the correct dashboard path based on user role
         const dashboardPath = profile?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
-
-        // Enhanced mobile navigation with longer delay for state stabilization
-        const navigationDelay = deviceIsMobile ? 800 : 200; // Even longer delay for mobile
-
-        console.log(`Navigation delay: ${navigationDelay}ms for ${deviceIsMobile ? 'mobile' : 'desktop'}`);
-        console.log(`Target dashboard: ${dashboardPath}`);
-
-        setTimeout(() => {
-          console.log(`Executing navigation to: ${dashboardPath}`);
-          navigate(dashboardPath, { replace: true });
-        }, navigationDelay);
+        
+        // Navigate immediately without delays
+        navigate(dashboardPath, { replace: true });
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
         if (error) throw error;
@@ -214,14 +183,8 @@ const AuthForm: React.FC = () => {
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // Mobile-specific error messages
+      // Simplified error messages
       let errorMessage = error.message || "Terjadi kesalahan";
-
-      if (deviceIsMobile && error.message?.includes('fetch')) {
-        errorMessage = "Koneksi internet bermasalah. Pastikan HP terhubung ke internet dan coba lagi.";
-      } else if (deviceIsMobile && error.message?.includes('CORS')) {
-        errorMessage = "Masalah konfigurasi server. Silakan hubungi administrator.";
-      }
       
       setFeedback({ type: "error", message: errorMessage });
     }
@@ -262,22 +225,22 @@ const AuthForm: React.FC = () => {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
-          <div className="lg:hidden text-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <div className="lg:hidden text-center mb-6">
+            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
               <BookOpen className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800">ClassRoom</h1>
           </div>
 
           {/* Form Header */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
               {authType === "login" ? "Halo!" : "Reset Password"}
             </h2>
-            <p className="text-gray-600">
+            <p className="text-gray-600 text-sm sm:text-base">
               {authType === "login" 
                 ? "Silakan login untuk melanjutkan" 
                 : "Kami akan kirim password baru ke email kamu"}
@@ -287,7 +250,7 @@ const AuthForm: React.FC = () => {
           {feedback && <AlertBox type={feedback.type} message={feedback.message} />}
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
               <InputField
                 id="email"
                 label="Email"
@@ -319,11 +282,12 @@ const AuthForm: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 px-4 rounded-lg text-white font-semibold text-base
+                className="w-full py-4 px-4 rounded-lg text-white font-semibold text-base
                            bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700
                            focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
                            disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
-                           transform hover:scale-[1.01] active:scale-[0.99] shadow-md"
+                           transform hover:scale-[1.01] active:scale-[0.99] shadow-md touch-manipulation
+                           min-h-[48px]" // Minimum touch target size
               >
                 {loading ? (
                   <div className="flex items-center justify-center">
@@ -356,15 +320,15 @@ const AuthForm: React.FC = () => {
           </div>
 
           {/* Info boxes - casual tone */}
-          <div className="mt-8 space-y-3">
-            <div className="p-3.5 bg-blue-50 rounded-lg text-sm">
+          <div className="mt-6 space-y-3">
+            <div className="p-3 bg-blue-50 rounded-lg text-xs sm:text-sm">
               <p className="text-blue-900">
                 <span className="font-semibold">💡 Info:</span> Sistem otomatis deteksi apakah kamu guru atau siswa dari email yang digunakan
               </p>
             </div>
 
             {authType === "login" && (
-              <div className="p-3.5 bg-amber-50 rounded-lg text-sm">
+              <div className="p-3 bg-amber-50 rounded-lg text-xs sm:text-sm">
                 <p className="text-amber-900">
                   <span className="font-semibold">🔑 Password siswa:</span> Format tanggal lahir (DDMMYYYY), contoh: 15082005
                 </p>
@@ -372,7 +336,7 @@ const AuthForm: React.FC = () => {
             )}
 
             {authType === "forgot-password" && (
-              <div className="p-3.5 bg-green-50 rounded-lg text-sm">
+              <div className="p-3 bg-green-50 rounded-lg text-xs sm:text-sm">
                 <p className="text-green-900">
                   <span className="font-semibold">✓ Password direset:</span> Ke tanggal lahir kamu (DDMMYYYY)
                 </p>
