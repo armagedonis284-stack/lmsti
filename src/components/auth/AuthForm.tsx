@@ -159,18 +159,30 @@ const AuthForm: React.FC = () => {
           const { error: studentError } = await studentSignIn(email, password);
           if (studentError) {
             console.error('Student login also failed:', studentError.message);
-            throw studentError;
+            
+            // Show specific error message
+            if (studentError.message === 'Password salah') {
+              setPasswordError("Password salah");
+            } else if (studentError.message === 'Email tidak ditemukan atau akun tidak aktif') {
+              setEmailError("Email tidak ditemukan atau akun tidak aktif");
+            } else {
+              setFeedback({ type: "error", message: studentError.message });
+            }
+            return;
           }
         }
 
-        // Simple navigation after successful login
-        console.log('Login successful, navigating to dashboard...');
-        
-        // Determine the correct dashboard path based on user role
-        const dashboardPath = profile?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
-        
-        // Navigate immediately without delays
-        navigate(dashboardPath, { replace: true });
+        // Show success message
+        setFeedback({
+          type: "success",
+          message: "Login berhasil! Mengarahkan ke dashboard..."
+        });
+
+        // Navigate after short delay
+        setTimeout(() => {
+          const dashboardPath = profile?.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+          navigate(dashboardPath, { replace: true });
+        }, 1000);
       } else if (authType === "forgot-password") {
         const { error } = await studentForgotPassword(email);
         if (error) throw error;
@@ -183,7 +195,7 @@ const AuthForm: React.FC = () => {
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // Simplified error messages
+      // Show specific error messages
       let errorMessage = error.message || "Terjadi kesalahan";
       
       setFeedback({ type: "error", message: errorMessage });

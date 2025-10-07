@@ -1,14 +1,13 @@
 import React, { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/SimpleAuthContext";
-import { StudentManagementProvider } from "./contexts/StudentManagementContext";
-import SimpleProtectedRoute, { UserRole } from "./components/SimpleProtectedRoute";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import ProtectedRoute, { UserRole } from "./components/ProtectedRoute";
 import Layout from "./components/layout/Layout";
 import LoadingScreen from "./components/ui/LoadingScreen";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
 
 // Lazy load biar cepat load awal
-const SimpleAuthForm = lazy(() => import("./components/auth/SimpleAuthForm"));
+const AuthForm = lazy(() => import("./components/auth/AuthForm"));
 const TeacherDashboard = lazy(() => import("./components/teacher/TeacherDashboard"));
 const ManageClasses = lazy(() => import("./components/teacher/ManageClasses"));
 const ClassStudents = lazy(() => import("./components/teacher/ClassStudents"));
@@ -31,10 +30,10 @@ const AdditionalAssignments = lazy(() => import("./components/student/Additional
 const StudentLeaderboard = lazy(() => import("./components/student/StudentLeaderboard"));
 
 const AppContent: React.FC = () => {
-  const { user, profile, loading, isAuthenticated } = useAuth();
+  const { user, profile, loading } = useAuth();
 
   if (loading) return <LoadingScreen />;
-  if (!isAuthenticated) return <SimpleAuthForm />;
+  if (!user || !profile) return <AuthForm />;
 
   const defaultPath = profile.role === "teacher" ? "/teacher/dashboard" : "/student/dashboard";
 
@@ -46,9 +45,9 @@ const AppContent: React.FC = () => {
       <Route
         path="/teacher/*"
         element={
-          <SimpleProtectedRoute requiredRole={UserRole.Teacher}>
+          <ProtectedRoute requiredRole={UserRole.Teacher}>
             <Layout />
-          </SimpleProtectedRoute>
+          </ProtectedRoute>
         }
       >
         <Route path="dashboard" element={<TeacherDashboard />} />
@@ -70,9 +69,9 @@ const AppContent: React.FC = () => {
       <Route
         path="/student/*"
         element={
-          <SimpleProtectedRoute requiredRole={UserRole.Student}>
+          <ProtectedRoute requiredRole={UserRole.Student}>
             <Layout />
-          </SimpleProtectedRoute>
+          </ProtectedRoute>
         }
       >
         <Route path="dashboard" element={<StudentDashboard />} />
@@ -94,13 +93,11 @@ function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <StudentManagementProvider>
-          <Router>
-            <Suspense fallback={<LoadingScreen />}>
-              <AppContent />
-            </Suspense>
-          </Router>
-        </StudentManagementProvider>
+        <Router>
+          <Suspense fallback={<LoadingScreen />}>
+            <AppContent />
+          </Suspense>
+        </Router>
       </AuthProvider>
     </ErrorBoundary>
   );

@@ -150,14 +150,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
 
-    // Fallback timeout to prevent infinite loading
-    const fallbackTimeout = setTimeout(() => {
-      if (isMounted && loading) {
-        console.warn('Auth initialization timeout, forcing loading to false');
-        setLoading(false);
-      }
-    }, 10000); // 10 second timeout
-
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
@@ -278,7 +270,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
-      clearTimeout(fallbackTimeout);
       subscription.unsubscribe();
     };
   }, [determineUserType, updateAuthState]);
