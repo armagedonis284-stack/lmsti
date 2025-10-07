@@ -3,14 +3,23 @@ import { BookOpen } from 'lucide-react';
 
 const LoadingScreen: React.FC = () => {
   const [showTimeout, setShowTimeout] = useState(false);
+  const [showRetry, setShowRetry] = useState(false);
 
   useEffect(() => {
-    // Show timeout message after 3 seconds
+    // Show timeout message after 5 seconds
     const timeout = setTimeout(() => {
       setShowTimeout(true);
-    }, 3000);
+    }, 5000);
 
-    return () => clearTimeout(timeout);
+    // Show retry option after 10 seconds
+    const retryTimeout = setTimeout(() => {
+      setShowRetry(true);
+    }, 10000);
+
+    return () => {
+      clearTimeout(timeout);
+      clearTimeout(retryTimeout);
+    };
   }, []);
 
   return (
@@ -44,6 +53,21 @@ const LoadingScreen: React.FC = () => {
           <button 
             onClick={() => window.location.reload()} 
             className="mt-2 px-4 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
+          >
+            Refresh Halaman
+          </button>
+        </div>
+      )}
+
+      {/* Retry Option */}
+      {showRetry && (
+        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-center max-w-sm">
+          <p className="text-red-800 text-sm mb-2">
+            <span className="font-semibold">⚠️ Masalah loading?</span> Coba refresh halaman.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700 transition-colors"
           >
             Refresh Halaman
           </button>

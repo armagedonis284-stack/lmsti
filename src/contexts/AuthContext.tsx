@@ -74,7 +74,7 @@ export const useAuth = () => {
   return context;
 };
 
-// Optimized Auth Provider with minimal queries and fast loading
+// Simplified Auth Provider with mobile compatibility
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -150,6 +150,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let isMounted = true;
 
+    // Fallback timeout to prevent infinite loading
+    const fallbackTimeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn('Auth initialization timeout, forcing loading to false');
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
@@ -222,6 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Error in initializeAuth:', error);
+        handleMobileError(error, 'initializeAuth');
         if (isMounted) {
           setLoading(false);
         }
@@ -269,9 +278,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       isMounted = false;
+      clearTimeout(fallbackTimeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [determineUserType, updateAuthState]);
 
   const signIn = async (email: string, password: string) => {
     console.log('Attempting teacher login for:', email);

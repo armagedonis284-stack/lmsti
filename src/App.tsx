@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import ProtectedRoute, { UserRole } from "./components/ProtectedRoute";
 import Layout from "./components/layout/Layout";
 import LoadingScreen from "./components/ui/LoadingScreen";
+import ErrorBoundary from "./components/ui/ErrorBoundary";
 
 // Lazy load biar cepat load awal
 const AuthForm = lazy(() => import("./components/auth/AuthForm"));
@@ -90,13 +91,15 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Suspense fallback={<LoadingScreen />}>
-          <AppContent />
-        </Suspense>
-      </Router>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router>
+          <Suspense fallback={<LoadingScreen />}>
+            <AppContent />
+          </Suspense>
+        </Router>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 
